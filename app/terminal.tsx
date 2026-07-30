@@ -5,7 +5,8 @@ import {
   getNode, HOME, isDir, promptPath, resolvePath,
   type StatDir, type StatMap,
 } from "@/lib/fs";
-import { VISIBLE_COMMANDS, type PostMeta } from "@/lib/commands";
+import { VISIBLE_COMMANDS, type Ctx, type PostMeta } from "@/lib/commands";
+import { loginDate } from "@/lib/command-utils";
 import { detectLang, type Lang } from "@/lib/i18n";
 import { execute } from "@/lib/shell";
 import { ME } from "@/lib/me";
@@ -76,9 +77,6 @@ export default function Terminal({
   const booted = useRef(false);
   // 读过的文件缓存起来，同一个文件不会请求两次
   const fileCache = useRef(new Map<string, string>());
-  // 开场动画只是装饰，用户随时可以打断。输入框绝不 disabled ——
-  // 一旦动画因为任何原因没跑完，disabled 会把人永久锁在外面
-  const bootAborted = useRef(false);
 
   const prompt = `${ME.user}@${ME.host}:${promptPath(cwd)}$ `;
 
@@ -91,6 +89,7 @@ export default function Terminal({
 
   /** 命令历史跨刷新保留，像 ~/.bash_history。留最近 200 条，别让 localStorage 无限长 */
   const HISTORY_KEY = "history";
+  const LAST_LOGIN_KEY = "lastLogin";
   const HISTORY_MAX = 200;
 
   function saveHistory() {
@@ -127,6 +126,29 @@ export default function Terminal({
     return text;
   }
 
+  /** ctx 的构造。开场序列也要用，所以抽出来 —— lang 可以覆盖，因为 setLang 要下一轮渲染才生效 */
+  function makeCtx(langNow: Lang, onClear: () => void = () => {}): Omit<Ctx, "piped"> {
+    return {
+      root,
+      cwd,
+      setCwd,
+      clear: onClear,
+      // 在按键处理里调用，算用户手势，不会被弹窗拦截
+      openUrl: (url) => window.open(url, "_blank", "noopener"),
+      toggleTheme: () => {
+        const el = document.documentElement;
+        el.dataset.theme = el.dataset.theme === "amber" ? "" : "amber";
+      },
+      read: readFile,
+      lang: langNow,
+      setLang,
+      t: (zh, en) => (langNow === "zh" ? zh : en),
+      history: history.current,
+      posts,
+      stats,
+    };
+  }
+
   async function run(raw: string) {
     const cmdInput = raw.trim();
     push(
@@ -142,25 +164,12 @@ export default function Terminal({
     saveHistory();
 
     let cleared = false;
-    const { output, error } = await execute(cmdInput, {
-      root,
-      cwd,
-      setCwd,
-      clear: () => { cleared = true; },
-      // 在按键处理里调用，算用户手势，不会被弹窗拦截
-      openUrl: (url) => window.open(url, "_blank", "noopener"),
-      toggleTheme: () => {
-        const el = document.documentElement;
-        el.dataset.theme = el.dataset.theme === "amber" ? "" : "amber";
-      },
-      read: readFile,
-      lang,
-      setLang,
-      t: (zh, en) => (lang === "zh" ? zh : en),
-      history: history.current,
-      posts,
-      stats,
-    });
+    const { output, error } = await execute(
+      cmdInput,
+      makeCtx(lang, () => {
+        cleared = true;
+      })
+    );
 
     if (cleared) return setLines([]);
     if (error) pushLine(error, "err");
@@ -210,7 +219,6 @@ export default function Terminal({
   }
 
   function onKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
-    bootAborted.current = true; // 用户开始打字了，动画让路
     const el = e.currentTarget;
     const caret = el.selectionStart ?? input.length;
 
@@ -275,21 +283,24 @@ export default function Terminal({
     }
   }
 
-  // 开场：打字动画执行 neofetch
+  /**
+   * 开场 = 一次 SSH 登录：先 lastlog 那行，再 motd，最后 shell 跑 ~/.bashrc（里面是 neofetch）。
+   * 之前的打字动画其实在假装用户自己敲了命令 —— 真实登录是服务端直接打印，也更快进入可用状态
+   */
   useEffect(() => {
     if (booted.current) return;
     booted.current = true;
-    const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
     (async () => {
       // 先定语言：记住的选择优先，否则看浏览器 —— 外国访客不该需要先学会敲 lang。
       // 初值和服务端一样是 zh，检测放在这里而不是渲染期，避免 hydration 不匹配
-      const saved = (() => {
+      const readStore = (k: string) => {
         try {
-          return localStorage.getItem("lang");
+          return localStorage.getItem(k);
         } catch {
           return null; // 隐私模式下会抛
         }
-      })();
+      };
+      const saved = readStore("lang");
       const initial: Lang =
         saved === "zh" || saved === "en"
           ? saved
@@ -298,7 +309,7 @@ export default function Terminal({
 
       // 恢复上次的命令历史，↑ 立刻就能翻到
       try {
-        const raw = localStorage.getItem(HISTORY_KEY);
+        const raw = readStore(HISTORY_KEY);
         const parsed: unknown = raw ? JSON.parse(raw) : null;
         if (Array.isArray(parsed)) {
           history.current = parsed.filter((h): h is string => typeof h === "string");
@@ -308,23 +319,25 @@ export default function Terminal({
         // 存坏了就当没有，不值得为此中断启动
       }
 
-      const boot = "neofetch";
-      for (let i = 1; i <= boot.length; i++) {
-        if (bootAborted.current) return; // 用户抢先动手了，动画到此为止
-        setInput(boot.slice(0, i));
-        await sleep(70);
+      // Last login：真的是上次来的时间。第一次来就不打这行，和 lastlog 没有记录时一样
+      const previous = readStore(LAST_LOGIN_KEY);
+      if (previous) {
+        const at = new Date(previous);
+        if (!Number.isNaN(at.getTime()))
+          pushLine(`Last login: ${loginDate(at)}`, "dim");
       }
-      await sleep(300);
-      if (bootAborted.current) return;
-      await run(boot);
-      setInput("");
-      // 用 initial 而不是 lang —— setLang 要等下一次渲染才生效
-      pushLine(
-        initial === "zh"
-          ? "\n输入 help 开始探索。管道、cd、man 都是真的。"
-          : "\nType help to start. The pipes, cd and man pages are real.\nRunning in English — use `lang zh` for Chinese.",
-        "dim"
-      );
+      try {
+        localStorage.setItem(LAST_LOGIN_KEY, new Date().toISOString());
+      } catch {
+        // 记不住就算了
+      }
+
+      // motd 和 neofetch 都直接出结果，不显示提示符 —— 它们不是用户敲的
+      const banner = await execute("motd", makeCtx(initial));
+      if (typeof banner.output === "string") pushLine(banner.output);
+      const fetched = await execute("neofetch", makeCtx(initial));
+      if (fetched.output && typeof fetched.output === "object")
+        push(<Neofetch info={fetched.output.info} />);
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

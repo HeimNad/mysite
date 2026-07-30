@@ -4,6 +4,8 @@ import { getNode, HOME, isDir, resolvePath, type FileStat, type StatDir } from "
 import { ME } from "./me.ts";
 import type { Ctx } from "./commands.ts";
 
+const MONTHS = "Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec".split(" ");
+
 /**
  * 命令要么读文件参数，要么读 stdin —— 和真 coreutils 一样。
  * 存在性和目录判断先在结构树上做完，错误信息不变，也省掉无谓的请求
@@ -79,8 +81,6 @@ export function treeLines(dir: StatDir, showAll: boolean, prefix = ""): string[]
   });
 }
 
-const MONTHS = "Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec".split(" ");
-
 /** ls -l 的日期列：Jul 29 20:33。按 UTC 格式化，各地看到的一样 */
 export function lsDate(iso: string): string {
   const d = new Date(iso);
@@ -103,6 +103,43 @@ export function longLine(
     lsDate(stat?.mtime ?? new Date(0).toISOString()),
     name + (dir ? "/" : ""),
   ].join(" ");
+}
+
+/** 统计文件系统里有多少文件、多少字节 —— 登录横幅的 Filesystem 行要真值 */
+export function fsUsage(
+  dir: StatDir,
+  stats: Record<string, FileStat>,
+  prefix: string[] = []
+): { files: number; bytes: number } {
+  let files = 0;
+  let bytes = 0;
+  for (const [name, node] of Object.entries(dir)) {
+    const segs = [...prefix, name];
+    if (isDir(node)) {
+      const sub = fsUsage(node, stats, segs);
+      files += sub.files;
+      bytes += sub.bytes;
+    } else {
+      files += 1;
+      bytes += stats[segs.join("/")]?.size ?? 0;
+    }
+  }
+  return { files, bytes };
+}
+
+/** 1234 → "1.2 kB"。给横幅用，不追求精确 */
+export function humanSize(bytes: number): string {
+  return bytes < 1000 ? `${bytes} B` : `${(bytes / 1000).toFixed(1)} kB`;
+}
+
+/** 登录时间戳：Wed Jul 30 18:42:11 2026，和 lastlog 的格式一致 */
+export function loginDate(d: Date): string {
+  const days = "Sun Mon Tue Wed Thu Fri Sat".split(" ");
+  const p = (n: number) => String(n).padStart(2, "0");
+  return (
+    `${days[d.getDay()]} ${MONTHS[d.getMonth()]} ${String(d.getDate()).padStart(2, " ")} ` +
+    `${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())} ${d.getFullYear()}`
+  );
 }
 
 /**

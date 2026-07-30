@@ -54,7 +54,19 @@ VERSION="0.5 (双语版)"
 ID=mysite
 HOME_URL="${ME.github}"`,
     },
-    home: { [ME.user]: home },
+    // .bashrc 是虚构的，但它让开场自洽：登录打印 motd，然后 shell 跑 .bashrc。
+    // 好奇的人 cat 一下就知道 neofetch 为什么会自己出现
+    home: {
+      [ME.user]: {
+        ...home,
+        ".bashrc": `# ~/.bashrc —— 每次登录时执行 / runs on every login
+
+neofetch
+
+# 就这一行。登录时看到的头像就是它打印的。
+# That single line is why the cat greets you.`,
+      },
+    },
     root: {}, // 权限不够，进不去也没东西
     tmp: {},
     usr: {

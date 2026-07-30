@@ -6,8 +6,11 @@ import { LANGS, pick, type Lang, type Msg } from "./i18n.ts";
 import { displayWidth, padCols } from "./text.ts";
 import {
   entries,
+  fsUsage,
   homeFile,
+  humanSize,
   longLine,
+  loginDate,
   readInput,
   takeNum,
   treeLines,
@@ -196,6 +199,47 @@ export const COMMANDS: Record<string, Cmd> = {
           return targets.length > 1 ? `${p}:\n${body}` : body;
         })
         .join("\n\n");
+    },
+  },
+
+  motd: {
+    desc: { zh: "显示登录横幅", en: "print the login banner" },
+    man: {
+      zh: "登录时自动打印的那段。字段名保持英文，数字都是真的 ——\n文件数和字节数来自实际的文件系统，不是编的。",
+      en: "The block printed when you log in. Field names stay English and the\nnumbers are real — file count and size come from the actual filesystem.",
+    },
+    run(_args, _stdin, ctx) {
+      const { files, bytes } = fsUsage(ctx.root, ctx.stats);
+      const aliases = Object.keys(ALIASES).length;
+      const cmds = Object.keys(COMMANDS).filter((n) => !COMMANDS[n].hidden).length;
+      const uptime = Math.floor(performance.now() / 1000);
+
+      // 两列排版。标签一律英文 —— 和 neofetch 一个道理，没人把 Uptime 叫"运行"
+      const row = (a: string, av: string, b: string, bv: string) =>
+        "  " + padCols(a, 14) + padCols(av, 24) + padCols(b, 14) + bv;
+
+      return [
+        ctx.t(
+          `欢迎来到浏览器里的假 Linux (mysite-sh 0.5)`,
+          `Welcome to Fake Linux, in a browser tab (mysite-sh 0.5)`
+        ),
+        "",
+        ` * Manual:   man <${ctx.t("命令", "command")}>`,
+        ` * Articles: posts`,
+        ` * Contact:  contact`,
+        ` * Source:   ${ME.github}`,
+        "",
+        `  System information as of ${loginDate(new Date())}`,
+        "",
+        row("Filesystem:", `${humanSize(bytes)} in ${files} files`, "Articles:", String(ctx.posts.length)),
+        row("Commands:", `${cmds} (+${aliases} aliases)`, "Locale:", ctx.lang),
+        row("Uptime:", `${uptime}s`, "Read-only:", "yes"),
+        "",
+        ctx.t(
+          "输入 help 开始探索。管道、cd、man 都是真的。",
+          "Type help to start. The pipes, cd and man pages are real."
+        ),
+      ].join("\n");
     },
   },
 
