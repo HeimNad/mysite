@@ -55,6 +55,46 @@ function Neofetch({ info }: { info: string[] }) {
   );
 }
 
+// 自己画的火车，不是原版 sl 的那张图。烟雾两帧交替
+const SMOKE = [
+  ["   (  ) (@@) ( )", "  (@@@)   (  )  ", " (   ) (@@@@)   "],
+  ["  (@@) (  ) (@@)", " (   )  (@@@)   ", "(@@@@)  (   )   "],
+];
+const TRAIN = [
+  "      _____",
+  "  ___|[_]_|____________     ____________",
+  " |             |  ___  |   |  __    __  |",
+  " |   H E I M   | |[o]| |===|  ||    ||  |",
+  " |_____________|_|___|_|   |____________|",
+  "   (O)     (O)   (o) (o)     (o)    (o)",
+];
+const TRAIN_W = Math.max(...TRAIN.map((l) => l.length));
+const TRACK_W = 78; // 经典终端宽度，够它开一段
+
+/** sl：火车从右往左开过去，开完这块自己塌掉，输出流上不留空洞 */
+function Sl() {
+  const [x, setX] = useState(TRACK_W);
+
+  useEffect(() => {
+    // 尊重系统的「减少动态效果」——静态摆一辆，别硬动
+    if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return;
+    const id = setInterval(() => setX((v) => v - 2), 55);
+    return () => clearInterval(id);
+  }, []);
+
+  if (x <= -TRAIN_W) return null; // 开过去了
+
+  const pad = (line: string) =>
+    x >= 0 ? " ".repeat(x) + line : line.slice(-x);
+  const smoke = SMOKE[Math.floor(x / 4) % 2 === 0 ? 0 : 1];
+
+  return (
+    <pre className="sl" aria-label="一列火车开了过去 / a train went by">
+      {[...smoke.map((s) => "      " + s), ...TRAIN].map(pad).join("\n")}
+    </pre>
+  );
+}
+
 export default function Terminal({
   root,
   posts,
@@ -126,6 +166,14 @@ export default function Terminal({
     return text;
   }
 
+  /** curl 用：取本站某个路径。非 2xx 按 curl -f 的说法报错，不然会吐出一整页 404 HTML */
+  async function fetchPath(path: string): Promise<string> {
+    const res = await fetch(path);
+    if (!res.ok)
+      throw new Error(`curl: (22) The requested URL returned error: ${res.status}`);
+    return (await res.text()).trimEnd();
+  }
+
   /** ctx 的构造。开场序列也要用，所以抽出来 —— lang 可以覆盖，因为 setLang 要下一轮渲染才生效 */
   function makeCtx(langNow: Lang, onClear: () => void = () => {}): Omit<Ctx, "piped"> {
     return {
@@ -140,6 +188,7 @@ export default function Terminal({
         el.dataset.theme = el.dataset.theme === "amber" ? "" : "amber";
       },
       read: readFile,
+      http: fetchPath,
       lang: langNow,
       setLang,
       t: (zh, en) => (langNow === "zh" ? zh : en),
@@ -175,6 +224,7 @@ export default function Terminal({
     if (error) pushLine(error, "err");
     else if (typeof output === "string") { if (output) pushLine(output); }
     else if (output?.render === "neofetch") push(<Neofetch info={output.info} />);
+    else if (output?.render === "sl") push(<Sl />);
   }
 
   // Tab 补全：管道后仍然补全命令，路径相对 cwd
@@ -336,7 +386,7 @@ export default function Terminal({
       const banner = await execute("motd", makeCtx(initial));
       if (typeof banner.output === "string") pushLine(banner.output);
       const fetched = await execute("neofetch", makeCtx(initial));
-      if (fetched.output && typeof fetched.output === "object")
+      if (typeof fetched.output === "object" && fetched.output?.render === "neofetch")
         push(<Neofetch info={fetched.output.info} />);
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps

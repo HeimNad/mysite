@@ -47,6 +47,14 @@ a { color: var(--link); }
   caret-color: var(--accent);
 }
 pre { font: inherit; }
+/* sl 的火车。行高锁死，免得动画过程中整页跟着抖 */
+.sl {
+  line-height: 1.15;
+  white-space: pre;
+  overflow: hidden;
+  margin: 0.25rem 0;
+}
+
 /* 404 页的静态光标，纯装饰 */
 .cursor {
   display: inline-block;

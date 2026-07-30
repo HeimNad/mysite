@@ -199,6 +199,35 @@ test("ls -l 的大小按字符数算，中文不会算成三倍", async () => {
   assert.match(r.output as string, /\s2 Jul/, "两个汉字应该算 2，不是 UTF-8 的 6 字节");
 });
 
+test("curl 只认本站路径，带主机名的一律解析失败", async () => {
+  // 这台机器没有对外网络，报错照抄真 curl 的编号
+  assert.match((await err("curl https://example.com"))!, /\(6\) Could not resolve host: example\.com/);
+  assert.match((await err("curl //evil.test/x"))!, /Could not resolve host: evil\.test/);
+  assert.match((await err("curl example.com"))!, /Could not resolve host: example\.com/);
+  assert.match((await err("curl relative/path"))!, /\(3\) URL rejected/);
+  assert.match((await err("curl"))!, /用法/);
+
+  // 本站路径原样传给 http
+  assert.equal(await out("curl /api/posts"), "GET /api/posts");
+  assert.equal(await out("curl /feed.xml"), "GET /feed.xml");
+});
+
+test("curl 的输出能进管道", async () => {
+  assert.equal(await out("curl /api/me | grep GET"), "GET /api/me");
+});
+
+test("sl 返回动画标记，且藏在 help 之外", async () => {
+  const r = await execute("sl", ctx());
+  assert.equal(r.error, undefined);
+  assert.deepEqual(r.output, { render: "sl" });
+
+  const { COMMANDS } = await import("./commands.ts");
+  assert.equal(COMMANDS.sl.hidden, true, "彩蛋不该出现在 help 里");
+  assert.doesNotMatch((await out("help")) as string, /\bsl\b/);
+  // 动画不是文本，接管道要报错
+  assert.match((await err("sl | wc -l"))!, /不能接管道/);
+});
+
 test("help 和 man 从注册表元数据生成", async () => {
   const help = await out("help") as string;
   assert.match(help, /grep/);

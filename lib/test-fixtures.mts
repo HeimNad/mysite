@@ -46,6 +46,8 @@ export function ctxOf(
       if (typeof node !== "string") throw new Error(`read: /${segs.join("/")}: 不是文件`);
       return node;
     },
+    // 测试里不发真请求，只把拿到的路径回显出来，方便断言 curl 传对了什么
+    http: async (path) => `GET ${path}`,
     history: [],
     posts,
   };

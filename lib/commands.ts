@@ -20,7 +20,7 @@ import {
  * 需要图形化渲染的输出，由 UI 层认领。
  * 文字在这里算好（所以双语和"防漏译"测试都覆盖得到），UI 只负责摆字符画
  */
-export type Visual = { render: "neofetch"; info: string[] };
+export type Visual = { render: "neofetch"; info: string[] } | { render: "sl" };
 
 /** 文章元数据。故意不含 body —— 正文按需从 /api/fs 取，别传两份 */
 export type PostMeta = { slug: string; title: string; date: string };
@@ -39,6 +39,8 @@ export type Ctx = {
   toggleTheme: () => void;
   /** 按需取文件内容（客户端走 fetch + 缓存）。路径必须已确认是文件 */
   read: (segs: string[]) => Promise<string>;
+  /** 取本站某个路径的响应体，curl 用。非 2xx 会抛 */
+  http: (path: string) => Promise<string>;
   lang: Lang;
   setLang: (lang: Lang) => void;
   /** 就地选译文：ctx.t("中文", "English") */
@@ -455,6 +457,45 @@ export const COMMANDS: Record<string, Cmd> = {
     },
   },
 
+  curl: {
+    desc: { zh: "取一个 URL 的内容", en: "transfer data from a URL" },
+    usage: { zh: "curl <路径>", en: "curl <path>" },
+    man: {
+      zh:
+        "只能访问本站自己的接口 —— 这台机器没有对外的网络，带主机名的地址一律解析失败。\n" +
+        "能取的都是真实存在的端点，不是编出来的响应：\n" +
+        "  curl /api/me                     我的信息\n" +
+        "  curl /api/posts                  文章列表\n" +
+        "  curl /api/fs/etc/motd            任意一个文件\n" +
+        "  curl /feed.xml                   RSS\n" +
+        "  curl /robots.txt                 robots\n" +
+        "输出可以进管道: curl /api/posts | grep title",
+      en:
+        "Only reaches this site's own endpoints — this machine has no outbound\n" +
+        "network, so anything with a hostname fails to resolve.\n" +
+        "Everything it can reach really exists; none of it is a canned response:\n" +
+        "  curl /api/me                     who I am\n" +
+        "  curl /api/posts                  the article list\n" +
+        "  curl /api/fs/etc/motd            any file\n" +
+        "  curl /feed.xml                   the RSS feed\n" +
+        "  curl /robots.txt                 robots\n" +
+        "The output pipes: curl /api/posts | grep title",
+    },
+    run(args, _stdin, ctx) {
+      const target = args.find((a) => !a.startsWith("-"));
+      if (!target)
+        throw new Error(ctx.t("curl: 用法: curl <路径>", "curl: usage: curl <path>"));
+
+      // 带主机名的地址一律失败 —— 这台机器只有回环，curl 的报错原样照抄
+      const host = /^(?:[a-z]+:)?\/\/([^/]+)/i.exec(target)?.[1] ?? /^([\w.-]+\.[a-z]{2,})/i.exec(target)?.[1];
+      if (host) throw new Error(`curl: (6) Could not resolve host: ${host}`);
+      if (!target.startsWith("/"))
+        throw new Error(`curl: (3) URL rejected: Bad hostname`);
+
+      return ctx.http(target);
+    },
+  },
+
   neofetch: {
     desc: { zh: "显示系统信息和头像", en: "show system info and avatar" },
     run(_args, _stdin, ctx): Visual {
@@ -521,6 +562,15 @@ export const COMMANDS: Record<string, Cmd> = {
   },
 
   // ---------- 彩蛋 ----------
+  sl: {
+    desc: { zh: "一列火车经过", en: "a steam locomotive passes by" },
+    hidden: true,
+    man: {
+      zh: "手滑把 ls 打成 sl 的人应得的惩罚。\n没有别的用途，也不会有。",
+      en: "The punishment you deserve for typing sl instead of ls.\nIt serves no other purpose and never will.",
+    },
+    run: (): Visual => ({ render: "sl" }),
+  },
   sudo: {
     desc: { zh: "以另一个用户身份执行命令", en: "execute a command as another user" },
     hidden: true,
