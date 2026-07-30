@@ -166,6 +166,26 @@ export default function Terminal({
     return text;
   }
 
+  /**
+   * 后台预热：一次请求把常用文件全灌进缓存，之后 cat 不用等往返。
+   * 纯优化 —— 失败了也没关系，单个文件的按需请求仍然兜得住
+   */
+  async function warmCache() {
+    try {
+      const res = await fetch("/api/fs-bundle");
+      if (!res.ok) return;
+      const files: unknown = await res.json();
+      if (!files || typeof files !== "object") return;
+      for (const [path, body] of Object.entries(files as Record<string, unknown>)) {
+        // 已经读过的不覆盖，免得盖掉更新的内容
+        if (typeof body === "string" && !fileCache.current.has(path))
+          fileCache.current.set(path, body);
+      }
+    } catch {
+      // 预热失败不该让任何事情出错
+    }
+  }
+
   /** curl 用：取本站某个路径。非 2xx 按 curl -f 的说法报错，不然会吐出一整页 404 HTML */
   async function fetchPath(path: string): Promise<string> {
     const res = await fetch(path);
@@ -385,6 +405,9 @@ export default function Terminal({
       // 只打 motd。neofetch 留给用户自己敲 —— 登录就糊三十行是没人要看的
       const banner = await execute("motd", makeCtx(initial));
       if (typeof banner.output === "string") pushLine(banner.output);
+
+      // 人读 banner 的这几秒里把文件缓存灌满，不 await —— 它不该拖住任何东西
+      void warmCache();
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

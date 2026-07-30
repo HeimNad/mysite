@@ -194,6 +194,24 @@ test("toFileMap: 每个文件一条，路径是绝对 segment 拼的", async () 
   assert.equal(countFiles(toStatTree(await readRootfs())), Object.keys(map).length);
 });
 
+test("预热包含所有常用文件，但不含文章", async () => {
+  const { HOME, toFileMap } = await import("./fs.ts");
+  const all = toFileMap(await readRootfs());
+  const postsPrefix = [...HOME, "posts"].join("/") + "/";
+
+  const warm = Object.keys(all).filter((p) => !p.startsWith(postsPrefix));
+  const posts = Object.keys(all).filter((p) => p.startsWith(postsPrefix));
+
+  assert.ok(posts.length > 0, "应该有文章被排除在外");
+  assert.ok(warm.includes(`home/${ME.user}/about.txt`), "about 该被预热");
+  assert.ok(warm.includes("etc/motd"), "系统文件也该被预热");
+  assert.equal(warm.length + posts.length, Object.keys(all).length, "不该有文件两头都不沾");
+
+  // 预热包不该大到失去意义 —— 它是要在后台一次拉完的
+  const bytes = warm.reduce((n, p) => n + all[p].length, 0);
+  assert.ok(bytes < 64 * 1024, `预热包 ${bytes} 字节，太大了该重新划线`);
+});
+
 test("cat 只为真实存在的文件发请求，且同一文件只读一次", async () => {
   const full = await readRootfs();
   const reads: string[] = [];
