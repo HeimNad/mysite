@@ -214,7 +214,6 @@ export const COMMANDS: Record<string, Cmd> = {
       const { files, bytes } = fsUsage(ctx.root, ctx.stats);
       const aliases = Object.keys(ALIASES).length;
       const cmds = Object.keys(COMMANDS).filter((n) => !COMMANDS[n].hidden).length;
-      const uptime = Math.floor(performance.now() / 1000);
 
       // 两列排版。标签一律英文 —— 和 neofetch 一个道理，没人把 Uptime 叫"运行"
       const row = (a: string, av: string, b: string, bv: string) =>
@@ -233,13 +232,13 @@ export const COMMANDS: Record<string, Cmd> = {
         "",
         `  System information as of ${loginDate(new Date())}`,
         "",
+        // 不放 Uptime —— 登录时它永远是 0，什么也没说。想看去敲 neofetch
         row("Filesystem:", `${humanSize(bytes)} in ${files} files`, "Articles:", String(ctx.posts.length)),
         row("Commands:", `${cmds} (+${aliases} aliases)`, "Locale:", ctx.lang),
-        row("Uptime:", `${uptime}s`, "Read-only:", "yes"),
         "",
         ctx.t(
-          "输入 help 开始探索。管道、cd、man 都是真的。",
-          "Type help to start. The pipes, cd and man pages are real."
+          "输入 help 开始探索，neofetch 看看我长什么样。管道、cd、man 都是真的。",
+          "Type help to look around, or neofetch to see my face. The pipes, cd and man pages are real."
         ),
       ].join("\n");
     },

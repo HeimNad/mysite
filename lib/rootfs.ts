@@ -5,7 +5,7 @@
 // 让内容随语言变就得把语言塞进路径，为几个玩笑文件不值得
 import type { FSDir } from "./fs.ts";
 import { ME } from "./me.ts";
-import { COMMANDS } from "./commands.ts";
+import { ALIASES, COMMANDS } from "./commands.ts";
 
 /** /bin 从命令注册表生成，这样加了新命令它自己会长出来，不会过期 */
 function bin(): FSDir {
@@ -54,17 +54,20 @@ VERSION="0.5 (双语版)"
 ID=mysite
 HOME_URL="${ME.github}"`,
     },
-    // .bashrc 是虚构的，但它让开场自洽：登录打印 motd，然后 shell 跑 .bashrc。
-    // 好奇的人 cat 一下就知道 neofetch 为什么会自己出现
+    // .bashrc 从 ALIASES 生成，所以里面写的每一条都真的能用，也不会和实现脱节
     home: {
       [ME.user]: {
         ...home,
-        ".bashrc": `# ~/.bashrc —— 每次登录时执行 / runs on every login
-
-neofetch
-
-# 就这一行。登录时看到的头像就是它打印的。
-# That single line is why the cat greets you.`,
+        ".bashrc": [
+          "# ~/.bashrc",
+          "# 这里定义的别名是真的 —— 试试 ll",
+          "# These aliases are real. Try ll.",
+          "",
+          ...Object.entries(ALIASES).map(([k, v]) => `alias ${k}='${v}'`),
+          "",
+          "# 想看头像就自己敲 neofetch，登录时不会自动糊你一屏",
+          "# Run neofetch yourself; logging in will not dump it on you.",
+        ].join("\n"),
       },
     },
     root: {}, // 权限不够，进不去也没东西

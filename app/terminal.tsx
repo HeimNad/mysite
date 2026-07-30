@@ -374,7 +374,7 @@ export default function Terminal({
       if (previous) {
         const at = new Date(previous);
         if (!Number.isNaN(at.getTime()))
-          pushLine(`Last login: ${loginDate(at)}`, "dim");
+          pushLine(`Last login: ${loginDate(at)}\n`, "dim");
       }
       try {
         localStorage.setItem(LAST_LOGIN_KEY, new Date().toISOString());
@@ -382,12 +382,9 @@ export default function Terminal({
         // 记不住就算了
       }
 
-      // motd 和 neofetch 都直接出结果，不显示提示符 —— 它们不是用户敲的
+      // 只打 motd。neofetch 留给用户自己敲 —— 登录就糊三十行是没人要看的
       const banner = await execute("motd", makeCtx(initial));
       if (typeof banner.output === "string") pushLine(banner.output);
-      const fetched = await execute("neofetch", makeCtx(initial));
-      if (typeof fetched.output === "object" && fetched.output?.render === "neofetch")
-        push(<Neofetch info={fetched.output.info} />);
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
