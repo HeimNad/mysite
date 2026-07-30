@@ -282,36 +282,46 @@ export default function Terminal({
     return leading + replacement;
   }
 
-  /** 改写输入内容并把光标放到指定位置 —— readline 那几个键都要用 */
+  /**
+   * 改写输入内容并把光标放到指定位置。直接写 DOM 再同步 state ——
+   * 之前是 setState + requestAnimationFrame 补光标，但用户刚打完字时 state 还没同步，
+   * 闭包里拿到的是旧值，Ctrl+E 就会算错位置
+   */
   function edit(value: string, caret = value.length) {
+    const el = inputRef.current;
+    if (el) {
+      el.value = value;
+      el.setSelectionRange(caret, caret);
+    }
     setInput(value);
-    requestAnimationFrame(() => inputRef.current?.setSelectionRange(caret, caret));
   }
 
   function onKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
     const el = e.currentTarget;
-    const caret = el.selectionStart ?? input.length;
+    // 一律以 DOM 为准，不读 state —— state 可能还没跟上刚刚敲进去的那个字符
+    const value = el.value;
+    const caret = el.selectionStart ?? value.length;
 
     // ---- readline 键位：终端用户的肌肉记忆，按下去没反应会立刻出戏 ----
     if (e.ctrlKey && !e.altKey && !e.metaKey) {
       switch (e.key) {
         case "a": // 行首
           e.preventDefault();
-          return edit(input, 0);
+          return edit(value, 0);
         case "e": // 行尾
           e.preventDefault();
-          return edit(input, input.length);
+          return edit(value, value.length);
         case "u": // 删到行首（bash 的语义，不是清空整行）
           e.preventDefault();
-          return edit(input.slice(caret), 0);
+          return edit(value.slice(caret), 0);
         case "k": // 删到行尾
           e.preventDefault();
-          return edit(input.slice(0, caret), caret);
+          return edit(value.slice(0, caret), caret);
         case "w": {
           // 删掉光标前的一个词：先吃掉空格，再吃掉非空格
           e.preventDefault();
-          const left = input.slice(0, caret).replace(/\S+\s*$/, "");
-          return edit(left + input.slice(caret), left.length);
+          const left = value.slice(0, caret).replace(/\S+\s*$/, "");
+          return edit(left + value.slice(caret), left.length);
         }
         case "c": {
           // 有选中内容时让浏览器去复制 —— 真终端也是靠 Ctrl+Shift+C 区分的
@@ -320,7 +330,7 @@ export default function Terminal({
           push(
             <div className="line">
               <span className="prompt">{prompt}</span>
-              {input}
+              {value}
               <span className="dim">^C</span>
             </div>
           );
@@ -442,7 +452,7 @@ export default function Terminal({
           autoCapitalize="off"
           autoCorrect="off"
           spellCheck={false}
-          aria-label="终端输入"
+          aria-label={lang === "zh" ? "终端输入" : "Terminal input"}
         />
       </div>
       <div ref={endRef} />
