@@ -1,0 +1,12 @@
+Hi, I'm {{name}} — a university student who likes computers.
+
+This site is a terminal, and it is not a picture of one. Pipes work,
+cd works, Tab completes paths, every command has a real man page.
+Try: cat skills.txt | grep Language | wc -l
+
+  help      what you can do here
+  posts     things I've written (Chinese only for now)
+  tree /    the whole filesystem
+  contact   how to reach me
+
+Source: {{github}}

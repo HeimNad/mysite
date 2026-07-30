@@ -1,0 +1,42 @@
+// RSS 的 XML 构造。放在 lib 里而不是 route 里，这样能测
+import { ME, SITE_URL } from "./me.ts";
+import type { Post } from "./content.ts";
+
+/** XML 里这五个字符必须转义，否则标题里一个 & 就能让整个 feed 解析失败 */
+export function esc(s: string): string {
+  return s.replace(
+    /[&<>"']/g,
+    (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&apos;" })[c]!
+  );
+}
+
+export function buildFeed(posts: Post[]): string {
+  const items = posts
+    .map((p) =>
+      [
+        "    <item>",
+        `      <title>${esc(p.title)}</title>`,
+        `      <link>${SITE_URL}/posts/${p.slug}</link>`,
+        `      <guid isPermaLink="true">${SITE_URL}/posts/${p.slug}</guid>`,
+        p.date ? `      <pubDate>${new Date(p.date).toUTCString()}</pubDate>` : "",
+        `      <description>${esc(p.description)}</description>`,
+        "    </item>",
+      ]
+        .filter(Boolean)
+        .join("\n")
+    )
+    .join("\n");
+
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>${esc(`${ME.name} 的博客 / ${ME.name}'s blog`)}</title>
+    <link>${SITE_URL}</link>
+    <description>${esc(`${ME.name} —— ${ME.title.zh} / ${ME.title.en}`)}</description>
+    <language>zh-CN</language>
+    <atom:link href="${SITE_URL}/feed.xml" rel="self" type="application/rss+xml"/>
+${items}
+  </channel>
+</rss>
+`;
+}
