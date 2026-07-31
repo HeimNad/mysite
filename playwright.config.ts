@@ -14,9 +14,12 @@ export default defineConfig({
   },
   projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
   webServer: {
-    command: "npm run dev",
+    // 跑生产构建而不是 dev：dev 会按需编译路由，首次导航能慢到撞断言超时，
+    // 于是同一条用例单独跑过、全量跑挂。顺便测的也是真正会上线的产物。
+    // 本地已经开着 dev server 的话会直接复用它，不会白等一次构建
+    command: "npm run build && npm start",
     url: "http://localhost:3000",
     reuseExistingServer: !process.env.CI,
-    timeout: 60_000,
+    timeout: 180_000,
   },
 });

@@ -25,6 +25,37 @@ test("readContent 读盘：目录嵌套、剥 frontmatter、插值 {{...}}", asy
   assert.doesNotMatch(contact, /\{\{/, "不该有残留的占位符");
 });
 
+test("占位符不会渲染成 [object Object]", async () => {
+  // ME.title 从字符串变成 { zh, en } 之后，{{title}} 曾经悄悄渲染成了 [object Object]
+  for (const [path, body] of Object.entries(toFileMap(await readRootfs()))) {
+    assert.doesNotMatch(body, /\[object \w+\]/, `/${path} 里有没渲染好的对象`);
+    assert.doesNotMatch(body, /\{\{\w/, `/${path} 里有没替换掉的占位符`);
+  }
+});
+
+test("双语字段必须写明取哪边，否则构建期就报错", async () => {
+  const { readContent } = await import("./content.ts");
+  const { mkdtemp, writeFile, rm } = await import("node:fs/promises");
+  const { tmpdir } = await import("node:os");
+  const { join } = await import("node:path");
+
+  const dir = await mkdtemp(join(tmpdir(), "mysite-"));
+  try {
+    await writeFile(join(dir, "bad.txt"), "我是{{title}}");
+    await assert.rejects(
+      () => readContent(dir),
+      /bad\.txt[\s\S]*不是字符串[\s\S]*title\.zh/,
+      "取到对象时要抛，而且要说清楚该怎么写"
+    );
+
+    await writeFile(join(dir, "bad.txt"), "我是{{title.zh}}，{{nope}} 原样留着");
+    const ok = await readContent(dir);
+    assert.equal(ok["bad.txt"], `我是${ME.title.zh}，{{nope}} 原样留着`);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
 test("命令在真实 rootfs 上跑得通", async () => {
   const root = await readRootfs();
   const real = async (cmd: string, cwd: string[] = at()) => {

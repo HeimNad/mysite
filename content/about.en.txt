@@ -1,4 +1,4 @@
-Hi, I'm {{name}} — a university student who likes computers.
+Hi, I'm {{name}}, {{title.en}}.
 
 This site is a terminal. Pipes, cd, Tab completion and man pages all work.
 Try: cat skills.txt | grep Language | wc -l

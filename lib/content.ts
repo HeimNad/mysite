@@ -16,11 +16,27 @@ export type Post = {
   body: string;
 };
 
-/** {{email}} 之类的占位符从 ME 取值，这样邮箱只需要在 me.ts 改一次 */
-function interpolate(text: string): string {
-  return text.replace(/\{\{(\w+)\}\}/g, (m, k: string) =>
-    k in ME ? String(ME[k as keyof typeof ME]) : m
-  );
+/**
+ * {{email}} 之类的占位符从 ME 取值，这样邮箱只需要在 me.ts 改一次。
+ * 双语字段要写清楚取哪边：{{title.zh}} / {{title.en}}。
+ *
+ * 取不到字符串就抛 —— 之前这里是 String(值)，ME.title 改成 { zh, en } 之后
+ * 悄悄渲染成了 [object Object]。构建期炸掉比把垃圾发出去好
+ */
+function interpolate(text: string, where: string): string {
+  return text.replace(/\{\{([\w.]+)\}\}/g, (whole, path: string) => {
+    const [key, sub] = path.split(".");
+    if (!(key in ME)) return whole; // 不认识的原样留着，可能本来就是正文
+
+    const value = ME[key as keyof typeof ME];
+    const picked: unknown = sub ? (value as Record<string, unknown>)?.[sub] : value;
+    if (typeof picked === "string") return picked;
+
+    throw new Error(
+      `${where}: 占位符 ${whole} 取到的不是字符串（${typeof picked}）。` +
+        `双语字段要写成 {{${key}.zh}} 或 {{${key}.en}}`
+    );
+  });
 }
 
 /**
@@ -67,7 +83,10 @@ export async function contentMtimes(
 }
 
 /** content/ 目录本身：只要正文，frontmatter 在终端里显示没意义 */
-export async function readContent(dir = CONTENT_DIR): Promise<FSDir> {
+export async function readContent(
+  dir = CONTENT_DIR,
+  prefix: string[] = []
+): Promise<FSDir> {
   const entries = (await readdir(dir, { withFileTypes: true }))
     .filter((e) => e.name !== ".DS_Store") // macOS 的垃圾，别让它出现在 ls -a 里
     .sort((a, b) => a.name.localeCompare(b.name));
@@ -75,9 +94,10 @@ export async function readContent(dir = CONTENT_DIR): Promise<FSDir> {
   const out: FSDir = {};
   for (const e of entries) {
     const full = path.join(dir, e.name);
+    const segs = [...prefix, e.name];
     out[e.name] = e.isDirectory()
-      ? await readContent(full)
-      : interpolate(parseFrontmatter(await readFile(full, "utf8")).body);
+      ? await readContent(full, segs)
+      : interpolate(parseFrontmatter(await readFile(full, "utf8")).body, segs.join("/"));
   }
   return out;
 }
@@ -95,7 +115,7 @@ function firstParagraph(body: string): string {
 async function readPost(file: string): Promise<Post> {
   const raw = await readFile(path.join(POSTS_DIR, file), "utf8");
   const { meta, body: rawBody } = parseFrontmatter(raw);
-  const body = interpolate(rawBody);
+  const body = interpolate(rawBody, `posts/${file}`);
   return {
     slug: file.replace(/\.md$/, ""),
     // 没写 title 就退回正文第一个 # 标题，再退回文件名
