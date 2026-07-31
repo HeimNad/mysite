@@ -2,7 +2,8 @@
 import { readdir, readFile, stat } from "node:fs/promises";
 import path from "node:path";
 import type { FSDir } from "./fs.ts";
-import { ME } from "./me.ts";
+import { ME, PRIMARY_LANG } from "./me.ts";
+import { LANGS, type Lang } from "./i18n.ts";
 import { mountRootfs } from "./rootfs.ts";
 
 const CONTENT_DIR = path.join(process.cwd(), "content");
@@ -11,8 +12,18 @@ export const POSTS_DIR = path.join(CONTENT_DIR, "posts");
 export type Post = {
   slug: string;
   title: string;
+  /** 发表日期 YYYY-MM-DD。空字符串表示没写 */
   date: string;
+  /** 最后更新日期，没写就是没更新过 */
+  updated: string;
   description: string;
+  /** 这篇文章用什么语言写的。没写就按站点主语言算 */
+  lang: Lang;
+  tags: string[];
+  /** 这篇文章单独的 OG 图，相对路径或绝对 URL。没写就用站点那张 */
+  image: string;
+  /** true 的话不发布：生产构建里读不到它，dev 下能看见方便预览 */
+  draft: boolean;
   body: string;
 };
 
@@ -102,6 +113,23 @@ export async function readContent(
   return out;
 }
 
+/**
+ * tags: rust, web  →  ["rust", "web"]
+ * 解析器不认 YAML 数组，但人手滑写成 [a, b] 很常见，把方括号一并吃掉
+ */
+function parseTags(raw: string | undefined): string[] {
+  return (raw ?? "")
+    .replace(/^\[|\]$/g, "")
+    .split(",")
+    .map((t) => t.trim().replace(/^["']|["']$/g, ""))
+    .filter(Boolean);
+}
+
+/** frontmatter 里的 true/yes/1 都算真 */
+function parseBool(raw: string | undefined): boolean {
+  return /^(true|yes|1)$/i.test(raw?.trim() ?? "");
+}
+
 /** 正文第一段当 description，用于 <meta> 和 OG */
 function firstParagraph(body: string): string {
   const para = body
@@ -116,28 +144,45 @@ async function readPost(file: string): Promise<Post> {
   const raw = await readFile(path.join(POSTS_DIR, file), "utf8");
   const { meta, body: rawBody } = parseFrontmatter(raw);
   const body = interpolate(rawBody, `posts/${file}`);
+  const lang = meta.lang?.trim();
   return {
     slug: file.replace(/\.md$/, ""),
     // 没写 title 就退回正文第一个 # 标题，再退回文件名
     title: meta.title ?? /^#\s+(.+)$/m.exec(body)?.[1] ?? file.replace(/\.md$/, ""),
     date: meta.date ?? "",
+    updated: meta.updated ?? "",
     description: meta.description ?? firstParagraph(body),
+    lang: LANGS.includes(lang as Lang) ? (lang as Lang) : PRIMARY_LANG,
+    tags: parseTags(meta.tags),
+    image: meta.image ?? "",
+    draft: parseBool(meta.draft),
     body,
   };
 }
 
-/** 按日期倒序，没日期的排最后 */
-export async function readPosts(): Promise<Post[]> {
+/**
+ * 按日期倒序，没日期的排最后。同一天的按文件名排 ——
+ * 否则顺序取决于 readdir，看着随机而且不可复现
+ *
+ * 草稿默认读不到。dev 下能看见，方便边写边预览
+ */
+export async function readPosts(opts: { drafts?: boolean } = {}): Promise<Post[]> {
+  const withDrafts = opts.drafts ?? process.env.NODE_ENV === "development";
   const files = (await readdir(POSTS_DIR)).filter((f) => f.endsWith(".md"));
-  const posts = await Promise.all(files.map(readPost));
-  return posts.sort((a, b) => (b.date || "").localeCompare(a.date || ""));
+  const all = await Promise.all(files.map(readPost));
+  return all
+    .filter((p) => withDrafts || !p.draft)
+    .sort((a, b) => (b.date || "").localeCompare(a.date || "") || a.slug.localeCompare(b.slug));
 }
 
 export async function getPost(slug: string): Promise<Post | null> {
   // 挡掉 ../ 之类的路径穿越 —— slug 来自 URL，是不可信输入
   if (!/^[\w-]+$/.test(slug)) return null;
   try {
-    return await readPost(`${slug}.md`);
+    const post = await readPost(`${slug}.md`);
+    // 草稿不能靠直接猜 URL 访问，否则 draft 等于没挡
+    if (post.draft && process.env.NODE_ENV !== "development") return null;
+    return post;
   } catch {
     return null;
   }

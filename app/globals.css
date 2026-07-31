@@ -164,6 +164,23 @@ pre { font: inherit; }
 .prose-footer a { text-decoration: none; }
 .prose-footer a:hover { text-decoration: underline; }
 
+/* 文章的日期、更新时间、标签 */
+.post-meta {
+  display: inline-flex;
+  gap: 0.5rem;
+  align-items: baseline;
+  flex-wrap: wrap;
+}
+.tag {
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 0.75rem;
+  color: var(--dim);
+  border: 1px solid #30363d;
+  border-radius: 3px;
+  padding: 0.05rem 0.4rem;
+}
+.tag::before { content: "#"; opacity: 0.6; }
+
 /* 文章列表 */
 .post-list { list-style: none; padding: 0; }
 .post-list li { margin: 0 0 2rem; }

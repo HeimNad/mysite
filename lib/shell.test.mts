@@ -132,8 +132,8 @@ test("posts 的中文标题按显示列数对齐，路径列不参差", async ()
   const r = await execute(
     "posts",
     ctxOf(ROOT, at(), [
-      { slug: "a", title: "为什么我的网站是个终端", date: "2026-07-29" },
-      { slug: "b", title: "短", date: "2026-01-01" },
+      { slug: "a", title: "为什么我的网站是个终端", date: "2026-07-29", lang: "zh", tags: [] },
+      { slug: "b", title: "短", date: "2026-01-01", lang: "zh", tags: [] },
     ])
   );
   const { displayWidth } = await import("./text.ts");

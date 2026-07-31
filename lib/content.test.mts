@@ -146,6 +146,61 @@ test("parseFrontmatter: 没有 frontmatter 时原样返回", async () => {
   );
 });
 
+test("draft: 生产读不到，显式要才给，猜 URL 也进不去", async () => {
+  const published = await readPosts({ drafts: false });
+  const withDrafts = await readPosts({ drafts: true });
+
+  const drafts = withDrafts.filter((p) => p.draft);
+  assert.ok(drafts.length > 0, "得有一篇草稿样例，否则这条测试是空的");
+  for (const d of drafts)
+    assert.ok(
+      !published.some((p) => p.slug === d.slug),
+      `草稿 ${d.slug} 漏进了发布列表`
+    );
+
+  // 直接访问 URL 也不能绕过去
+  const one = drafts[0];
+  assert.equal(await getPost(one.slug), null, "草稿不该能靠猜 slug 访问到");
+});
+
+test("排序：日期倒序，同一天按文件名 —— 顺序必须可复现", async () => {
+  const posts = await readPosts({ drafts: true });
+  for (let i = 1; i < posts.length; i++) {
+    const [prev, cur] = [posts[i - 1], posts[i]];
+    const byDate = (cur.date || "").localeCompare(prev.date || "");
+    assert.ok(byDate <= 0, `${prev.slug} 和 ${cur.slug} 的日期顺序反了`);
+    if (byDate === 0)
+      assert.ok(prev.slug.localeCompare(cur.slug) < 0, "同一天要按文件名，否则顺序看运气");
+  }
+  // 跑两次结果必须一样
+  const again = await readPosts({ drafts: true });
+  assert.deepEqual(again.map((p) => p.slug), posts.map((p) => p.slug));
+});
+
+test("frontmatter: tags / lang / updated / image / draft 都真的解析", async () => {
+  const { PRIMARY_LANG } = await import("./me.ts");
+  const posts = await readPosts({ drafts: true });
+  const tagged = posts.find((p) => p.tags.length);
+  assert.ok(tagged, "得有一篇带 tags 的，否则测不到");
+  assert.ok(!tagged.tags.some((t) => t.includes(",")), "tags 要拆开，不是留一整串");
+
+  // 没写 lang 的按站点主语言算，不是 undefined
+  for (const p of posts) assert.ok(["zh", "en"].includes(p.lang), `${p.slug} 的 lang 不合法`);
+  assert.equal(
+    posts.find((p) => p.slug === "why-a-terminal")?.lang,
+    PRIMARY_LANG,
+    "frontmatter 里没写 lang 就该拿站点主语言"
+  );
+
+  // 缺字段一律给空串/空数组，页面上不会冒出 undefined
+  for (const p of posts) {
+    assert.equal(typeof p.updated, "string");
+    assert.equal(typeof p.image, "string");
+    assert.equal(typeof p.draft, "boolean");
+    assert.ok(Array.isArray(p.tags));
+  }
+});
+
 test("readPosts: 按日期倒序，缺字段有兜底", async () => {
   const posts = await readPosts();
   assert.ok(posts.length > 0);
@@ -207,8 +262,8 @@ test("posts 命令：列标题日期，空列表有话说", async () => {
   };
   assert.match(await run("posts", []), /还没有文章/);
   const out = await run("posts", [
-    { slug: "a", title: "第一篇", date: "2026-07-29" },
-    { slug: "b", title: "第二篇", date: "2026-01-01" },
+    { slug: "a", title: "第一篇", date: "2026-07-29", lang: "zh", tags: [] },
+    { slug: "b", title: "第二篇", date: "2026-01-01", lang: "zh", tags: [] },
   ]);
   assert.match(out, /2026-07-29 {2}第一篇 {2}\(posts\/a\.md\)/);
   assert.match(out, /2026-01-01 {2}第二篇/);
@@ -221,7 +276,12 @@ test("RSS: 标题里的 & < > 不能破坏 XML", async () => {
       slug: "x",
       title: "C & C++ <标签> 与 'quote'",
       date: "2026-07-29",
+      updated: "",
       description: 'a & b <c> "d"',
+      lang: "zh",
+      tags: [],
+      image: "",
+      draft: false,
       body: "",
     },
   ]);

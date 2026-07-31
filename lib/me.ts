@@ -1,6 +1,6 @@
 // ============ 改这个文件 + content/ 目录就是改网站 ============
 // 文件内容在 content/ 里，可以用 {{name}} {{email}} {{github}} 等占位符引用这里的值
-import type { Msg } from "./i18n.ts";
+import type { Lang, Msg } from "./i18n.ts";
 
 export const ME = {
   user: "heimnad",
@@ -38,6 +38,9 @@ export function normalizeSiteUrl(raw: string | undefined): string {
 export const SITE_URL = normalizeSiteUrl(process.env.NEXT_PUBLIC_SITE_URL);
 
 /** 这台"机器"自己的名字。shell 名照 Unix 的规矩：全小写、短 */
+/** 文章没写 lang 时按这个算。fork 这个项目的人改这里 */
+export const PRIMARY_LANG: Lang = "zh";
+
 export const OS_NAME = "FakeOS";
 export const SHELL_NAME = "hnsh";
 export const SHELL_PATH = `/bin/${SHELL_NAME}`;

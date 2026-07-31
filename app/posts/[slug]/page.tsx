@@ -23,8 +23,12 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
       description: post.description,
       type: "article",
       publishedTime: post.date || undefined,
+      modifiedTime: post.updated || undefined,
       authors: [ME.name],
+      // 文章自带图就用它，否则回落到站点那张
+      ...(post.image ? { images: [post.image] } : {}),
     },
+    ...(post.tags.length ? { keywords: post.tags } : {}),
   };
 }
 
@@ -34,12 +38,24 @@ export default async function PostPage({ params }: Props) {
   const html = await renderMarkdown(post.body);
 
   return (
-    <article className="prose">
+    <article className="prose" lang={post.lang === "zh" ? "zh-CN" : "en"}>
       <nav className="prose-nav">
         <Link href="/posts">
           <span className="prompt">{`${ME.user}@${ME.host}:~$ `}</span>cd ../posts
         </Link>
-        {post.date && <time dateTime={post.date}>{post.date}</time>}
+        <span className="post-meta">
+          {post.date && <time dateTime={post.date}>{post.date}</time>}
+          {post.updated && (
+            <time dateTime={post.updated} title="最后更新 / last updated">
+              {` (↻ ${post.updated})`}
+            </time>
+          )}
+          {post.tags.map((t) => (
+            <span key={t} className="tag">
+              {t}
+            </span>
+          ))}
+        </span>
       </nav>
       <div dangerouslySetInnerHTML={{ __html: html }} />
       <footer className="prose-footer">

@@ -39,8 +39,35 @@ npm run build
 | `/etc`、`/bin` 里那些玩笑 | `lib/rootfs.ts` |
 
 内容文件里可以写 `{{name}}` `{{email}}` `{{github}}` 引用 `lib/me.ts` 的值，
-所以邮箱这种东西只需要在一个地方维护。文章的 frontmatter 支持
-`title` / `date` / `description`，缺了会分别退回正文第一个 `#` 标题、空、正文第一段。
+所以邮箱这种东西只需要在一个地方维护。双语字段要写明取哪边：`{{title.zh}}`。
+
+文章的 frontmatter 支持这些字段，**全部可选**：
+
+| 字段 | 作用 | 缺省 |
+|---|---|---|
+| `title` | 标题 | 正文第一个 `#`，再退回文件名 |
+| `date` | 发表日期 `YYYY-MM-DD`，用于排序 | 空（排最后） |
+| `updated` | 最后更新日期，文章页显示 `↻` | 不显示 |
+| `description` | `<meta>` 和 OG 卡片的摘要 | 正文第一段，截到 150 字 |
+| `tags` | 逗号分隔。终端里 `posts <标签>` 可筛 | 无 |
+| `lang` | `zh` / `en`。和界面语言不同时会标出来 | `lib/me.ts` 的 `PRIMARY_LANG` |
+| `image` | 这篇单独的 OG 图 | 站点那张 |
+| `draft` | `true` 则不发布 | `false` |
+
+```yaml
+---
+title: 为什么我的网站是个终端
+date: 2026-07-29
+tags: 终端, Next.js
+draft: true
+---
+```
+
+草稿在 `npm run dev` 下能看见方便预览，生产构建里读不到 —— 列表、RSS、sitemap
+里都没有，直接猜 URL 也进不去。
+
+frontmatter 解析器是故意写笨的，**只认单行 `key: value`**，不认 YAML 数组和嵌套。
+`tags` 用逗号分隔（写成 `[a, b]` 也认）。真需要完整 YAML 的时候再引入 gray-matter。
 
 `npm run avatar` 从 `assets/avatar.jpg` 一次生成四样：`neofetch` 的彩色字符画、
 圆形 favicon、iOS 图标、OG 分享图。
@@ -124,7 +151,28 @@ npm run avatar     # regenerate ASCII art, icons and the OG image from assets/av
 **Changing content requires no code.** `lib/me.ts` holds the name, email and
 GitHub URL; drop files into `content/` and `ls`/`cat`/Tab completion pick them up;
 `content/posts/*.md` become articles automatically. Content files may use
-`{{name}}`, `{{email}}` and `{{github}}` placeholders.
+`{{name}}`, `{{email}}` and `{{github}}` placeholders; bilingual fields need a
+language, as in `{{title.en}}`.
+
+Article frontmatter, all fields optional:
+
+| Field | Effect | Default |
+|---|---|---|
+| `title` | Title | First `#` in the body, else the filename |
+| `date` | `YYYY-MM-DD`, used for ordering | Empty, sorts last |
+| `updated` | Last-modified date, shown with `↻` | Not shown |
+| `description` | `<meta>` and OG summary | First paragraph, cut at 150 chars |
+| `tags` | Comma separated; `posts <tag>` filters by them | None |
+| `lang` | `zh` / `en`, flagged when it differs from the UI | `PRIMARY_LANG` in `lib/me.ts` |
+| `image` | Per-article OG image | The site's |
+| `draft` | `true` withholds it | `false` |
+
+Drafts are visible under `npm run dev` for previewing and absent from a
+production build — no listing, RSS or sitemap entry, and guessing the URL
+gets a 404.
+
+The frontmatter parser is deliberately small: single-line `key: value` only,
+no YAML arrays or nesting. Reach for gray-matter when that stops being enough.
 
 A few decisions worth knowing about:
 

@@ -33,12 +33,28 @@ export default async function PostsIndex() {
         </p>
       ) : (
         <>
-          <p className="dim">文章目前只有中文 / The articles are in Chinese only for now.</p>
+          {posts.every((p) => p.lang === "zh") && (
+            <p className="dim">文章目前只有中文 / The articles are in Chinese only for now.</p>
+          )}
           <ul className="post-list">
             {posts.map((p) => (
               <li key={p.slug}>
                 <Link href={`/posts/${p.slug}`}>{p.title}</Link>
-                {p.date && <time dateTime={p.date}>{p.date}</time>}
+                {p.date && (
+                  <time dateTime={p.date}>
+                    {p.date}
+                    {p.updated && ` (↻ ${p.updated})`}
+                  </time>
+                )}
+                {p.tags.length > 0 && (
+                  <span className="post-meta">
+                    {p.tags.map((t) => (
+                      <span key={t} className="tag">
+                        {t}
+                      </span>
+                    ))}
+                  </span>
+                )}
                 <p>{p.description}</p>
               </li>
             ))}

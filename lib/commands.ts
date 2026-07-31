@@ -26,7 +26,13 @@ export type Visual =
   | { render: "donut" };
 
 /** 文章元数据。故意不含 body —— 正文按需从 /api/fs 取，别传两份 */
-export type PostMeta = { slug: string; title: string; date: string };
+export type PostMeta = {
+  slug: string;
+  title: string;
+  date: string;
+  lang: Lang;
+  tags: string[];
+};
 
 /**
  * 命令能做的一切副作用都从这里走 —— 这个文件保持纯逻辑，不碰 window/document，
@@ -393,27 +399,52 @@ export const COMMANDS: Record<string, Cmd> = {
   },
 
   posts: {
-    desc: { zh: "列出所有文章（标题和日期）", en: "list all articles with titles and dates" },
+    desc: { zh: "列出所有文章", en: "list all articles" },
+    usage: { zh: "posts [标签]", en: "posts [tag]" },
     man: {
-      zh: "列出文章的标题和日期，按时间倒序。\nopen posts/<文件> 打开渲染版。",
-      en: "Lists article titles and dates, newest first.\nopen posts/<file> for the rendered version.",
+      zh: "列出文章的标题、日期和标签，按时间倒序。\n给一个标签就只列带那个标签的。\nopen posts/<文件> 打开渲染版。",
+      en: "Lists article titles, dates and tags, newest first.\nPass a tag to list only the articles carrying it.\nopen posts/<file> for the rendered version.",
     },
-    run(_args, _stdin, ctx) {
+    run(args, _stdin, ctx) {
       if (!ctx.posts.length)
         return ctx.t(
           "还没有文章。往 content/posts/ 里丢一个 .md 就有了。",
           "No articles yet. Drop a .md into content/posts/ and one appears."
         );
-      const dateW = Math.max(...ctx.posts.map((p) => p.date.length));
-      // 标题按显示列数补齐，中文标题后面的路径列才对得齐
-      const titleW = Math.max(...ctx.posts.map((p) => displayWidth(p.title)));
+
+      const wanted = args[0]?.toLowerCase();
+      const shown = wanted
+        ? ctx.posts.filter((p) => p.tags.some((t) => t.toLowerCase() === wanted))
+        : ctx.posts;
+
+      if (!shown.length) {
+        const all = [...new Set(ctx.posts.flatMap((p) => p.tags))].sort();
+        throw new Error(
+          ctx.t(
+            `posts: 没有标签为 ${args[0]} 的文章。` +
+              (all.length ? `现有标签: ${all.join(" ")}` : "还没有任何标签。"),
+            `posts: no articles tagged ${args[0]}. ` +
+              (all.length ? `Tags in use: ${all.join(" ")}` : "No tags are in use yet.")
+          )
+        );
+      }
+
+      const dateW = Math.max(...shown.map((p) => p.date.length));
+      // 标题按显示列数补齐，中文标题后面的列才对得齐
+      const titleW = Math.max(...shown.map((p) => displayWidth(p.title)));
+      const rows = shown.map((p) => {
+        // 路径要留着 —— 那是你接下来要 cat 或 open 的东西
+        const head = `${p.date.padEnd(dateW)}  ${padCols(p.title, titleW)}  (posts/${p.slug}.md)`;
+        // 文章语言和界面语言不一致时标出来，免得点进去发现读不懂
+        const lang = p.lang !== ctx.lang ? `  <${p.lang}>` : "";
+        const tags = p.tags.length ? `  [${p.tags.join(" ")}]` : "";
+        return head + lang + tags;
+      });
+
       return [
-        ...ctx.posts.map(
-          (p) => `${p.date.padEnd(dateW)}  ${padCols(p.title, titleW)}  (posts/${p.slug}.md)`
-        ),
+        ...rows,
         "",
         ctx.t("open posts/<文件> 打开渲染版。", "open posts/<file> for the rendered version."),
-        ...(ctx.lang === "en" ? ["Note: the articles are in Chinese only for now."] : []),
       ].join("\n");
     },
   },

@@ -12,7 +12,7 @@ export default async function Home() {
     readPosts(),
     contentMtimes(),
   ]);
-  const meta = posts.map(({ slug, title, date }) => ({ slug, title, date }));
+  const meta = posts.map(({ slug, title, date, lang, tags }) => ({ slug, title, date, lang, tags }));
   // ls -l 要的大小和时间。内容本身不发给客户端，所以大小得单独带
   const stats = toStatMap(root, mtimes, new Date().toISOString());
   const about = getNode(root, [...HOME, "about.txt"]);
