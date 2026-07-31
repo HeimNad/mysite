@@ -56,6 +56,31 @@ test("双语字段必须写明取哪边，否则构建期就报错", async () =>
   }
 });
 
+test("NEXT_PUBLIC_SITE_URL 少写协议也认，写错了要说人话", async () => {
+  const { normalizeSiteUrl } = await import("./me.ts");
+
+  // 第一次部署就栽在这儿：填了 heimnad.com，new URL() 抛 Invalid URL，
+  // 而 Next 把它报成 "Failed to collect configuration for /_not-found"
+  assert.equal(normalizeSiteUrl("heimnad.com"), "https://heimnad.com");
+  assert.equal(normalizeSiteUrl("https://heimnad.com"), "https://heimnad.com");
+  assert.equal(normalizeSiteUrl("  heimnad.com  "), "https://heimnad.com");
+
+  // 尾斜杠得去掉，否则拼出 https://heimnad.com//posts/x
+  assert.equal(normalizeSiteUrl("https://heimnad.com/"), "https://heimnad.com");
+  assert.equal(normalizeSiteUrl("heimnad.com/"), "https://heimnad.com");
+
+  // 本地的 http 要保住，别被强行升到 https
+  assert.equal(normalizeSiteUrl("http://localhost:3000"), "http://localhost:3000");
+  assert.equal(normalizeSiteUrl(undefined), "http://localhost:3000");
+  assert.equal(normalizeSiteUrl(""), "http://localhost:3000");
+
+  // 真填错了要给一条看得懂的错，而不是 Invalid URL
+  assert.throws(
+    () => normalizeSiteUrl("https://not a domain"),
+    /NEXT_PUBLIC_SITE_URL 不是合法地址[\s\S]*heimnad\.com/
+  );
+});
+
 test("版本号来自构建，不是手写的 0.x", async () => {
   const { VERSION, OS_NAME, SHELL_NAME, SHELL_PATH } = await import("./me.ts");
   // 要么是 commit hash（可带 -dirty），要么是拿不到 git 时的兜底

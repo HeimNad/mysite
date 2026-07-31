@@ -14,8 +14,28 @@ export const ME = {
   github: "https://github.com/heimnad", // 改成你的
 };
 
-/** sitemap 和 OG 图需要绝对 URL。有域名后设 NEXT_PUBLIC_SITE_URL 环境变量 */
-export const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
+/**
+ * 站点地址。填 heimnad.com 或 https://heimnad.com 都行，尾斜杠也会去掉 ——
+ * 少写协议的话 new URL() 会抛 Invalid URL，而 Next 把它报成
+ * "Failed to collect configuration for /_not-found"，完全指不到正地方
+ */
+export function normalizeSiteUrl(raw: string | undefined): string {
+  const s = raw?.trim();
+  if (!s) return "http://localhost:3000";
+  const withProtocol = /^https?:\/\//i.test(s) ? s : `https://${s}`;
+  try {
+    // origin 顺手去掉尾斜杠和路径，否则会拼出 https://x.com//posts/y
+    return new URL(withProtocol).origin;
+  } catch {
+    throw new Error(
+      `NEXT_PUBLIC_SITE_URL 不是合法地址: ${JSON.stringify(raw)}。` +
+        `写成 heimnad.com 或 https://heimnad.com`
+    );
+  }
+}
+
+/** sitemap、RSS 和 OG 图需要绝对 URL。有域名后设 NEXT_PUBLIC_SITE_URL 环境变量 */
+export const SITE_URL = normalizeSiteUrl(process.env.NEXT_PUBLIC_SITE_URL);
 
 /** 这台"机器"自己的名字。shell 名照 Unix 的规矩：全小写、短 */
 export const OS_NAME = "FakeOS";
