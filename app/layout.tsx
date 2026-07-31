@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Geist_Mono } from "next/font/google";
+import { Analytics } from "@vercel/analytics/next";
 import { ME, SITE_URL } from "@/lib/me";
 import "./globals.css";
 
@@ -30,7 +31,12 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="zh-CN" className={geistMono.variable}>
-      <body>{children}</body>
+      <body>
+        {children}
+        {/* 只统计页面浏览，不种 cookie、不跨站跟踪，所以不需要同意横幅。
+            /var/log/visits.log 里的说法已经跟着改过，别让文案撒谎 */}
+        <Analytics />
+      </body>
     </html>
   );
 }

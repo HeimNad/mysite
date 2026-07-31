@@ -88,11 +88,11 @@ POSIX taught you to expect.`,
     },
     var: {
       log: {
-        "visits.log": `[INFO ] 你是第 N 位访客，N 的具体值需要一个后端，而这个站没有
-[INFO ] 会话开始，没有 cookie，没有埋点，没有分析脚本
+        "visits.log": `[INFO ] 会话开始。有一个统计页面浏览量的脚本，不种 cookie，不跨站跟踪
+[INFO ] 所以站长知道有多少人来过，但不知道你是谁
 [WARN ] 检测到有人在读日志文件，好奇心水平: 偏高
-[INFO ] You are visitor number N. Computing N would require a backend.
-[INFO ] Session started. No cookies, no tracking, no analytics.
+[INFO ] Session started. One script counts page views. No cookies, no
+[INFO ] cross-site tracking. He knows how many came, not who you are.
 [WARN ] Someone is reading the log files. Curiosity level: elevated.
 [INFO ] 一切正常 / all systems nominal`,
       },
