@@ -1,10 +1,11 @@
 // 从 assets/avatar.jpg 派生两样东西，都是构建期一次性的：
-//   1. lib/avatar-ascii.json —— neofetch 左边的彩色字符画
+//   1. components/avatar-ascii.json —— neofetch 左边的彩色字符画
 //   2. app/icon.png / app/apple-icon.png —— 圆形图标（Next 按约定自动接上）
 // 换头像后重跑: npm run avatar [字符画列数]
 import sharp from "sharp";
 import { writeFileSync } from "node:fs";
 import { ME } from "../lib/site/me.ts"; // Node 原生剥类型，不用把名字邮箱抄第二遍
+import { escapeXml as esc } from "../lib/content/xml.ts";
 
 const SRC = "assets/avatar.jpg";
 const COLS = Number(process.argv[2]) || 40;
@@ -55,7 +56,7 @@ while (out.length && blank(out[out.length - 1])) out.pop();
 
 writeFileSync("components/avatar-ascii.json", JSON.stringify(out));
 for (const runs of out) console.log(runs.map((r) => r.text).join(""));
-console.log(`\n✓ lib/avatar-ascii.json (${COLS}x${out.length})`);
+console.log(`\n✓ components/avatar-ascii.json (${COLS}x${out.length})`);
 
 // ---------- 2. 圆形图标 ----------
 const WHITE = { r: 255, g: 255, b: 255, alpha: 1 };
@@ -92,7 +93,6 @@ await icon(180, "app/apple-icon.png"); // iOS 加到主屏幕时用
 async function ogImage(dest) {
   const [W, H] = [1200, 630];
   const AVATAR = 300;
-  const esc = (s) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
   const CJK = "PingFang SC, Hiragino Sans GB, Noto Sans CJK SC, Microsoft YaHei, sans-serif";
   const MONO = "SF Mono, Menlo, Consolas, monospace";
 

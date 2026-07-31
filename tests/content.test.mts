@@ -269,6 +269,14 @@ test("posts 命令：列标题日期，空列表有话说", async () => {
   assert.match(out, /2026-01-01 {2}第二篇/);
 });
 
+test("escapeXml 覆盖全部五个字符 —— 生成 OG 图的脚本共用它", async () => {
+  const { escapeXml } = await import("../lib/content/xml.ts");
+  // 曾经有两份转义器，脚本那份漏了引号；SVG 属性里出现 " 就会冲破属性
+  assert.equal(escapeXml(`&<>"'`), "&amp;&lt;&gt;&quot;&apos;");
+  assert.equal(escapeXml('他说"你好"'), "他说&quot;你好&quot;");
+  assert.equal(escapeXml("没有特殊字符"), "没有特殊字符");
+});
+
 test("RSS: 标题里的 & < > 不能破坏 XML", async () => {
   const { buildFeed } = await import("../lib/content/feed.ts");
   const xml = buildFeed([

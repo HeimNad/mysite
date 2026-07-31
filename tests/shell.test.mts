@@ -128,6 +128,22 @@ test("padCols 按显示列数对齐，中文算两列", async () => {
   assert.notEqual("终端".padEnd(10).length, displayWidth("终端".padEnd(10)), "这正是不能用 padEnd 的原因");
 });
 
+test("displayWidth 的范围边界 —— 字面量写法曾经把范围写飞", async () => {
+  const { displayWidth } = await import("../lib/terminal/text.ts");
+  // 原来写的是 `豈-﫿`，但打出的"豈"是 U+8C48 而不是 U+F900，
+  // 范围从汉字区中间横跨到 U+FAFF，把这些全算成了双宽
+  assert.equal(displayWidth("\uA78B"), 1, "拉丁扩展 D 是窄的");
+  assert.equal(displayWidth("\uE000"), 1, "私用区不该当双宽");
+  assert.equal(displayWidth("\uABCD"), 1, "Meetei Mayek 是窄的");
+  // 这两个原来反而漏掉了
+  assert.equal(displayWidth("\uF900"), 2, "CJK 兼容表意文字是宽的");
+  assert.equal(displayWidth("\u{20000}"), 2, "CJK 扩展 B 是宽的");
+  // 常用的照旧
+  assert.equal(displayWidth("中文"), 4);
+  assert.equal(displayWidth("\uAC00"), 2, "韩文音节");
+  assert.equal(displayWidth("abc"), 3);
+});
+
 test("posts 的中文标题按显示列数对齐，路径列不参差", async () => {
   const r = await execute(
     "posts",
