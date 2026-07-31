@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
-import { ME, SHELL_NAME } from "@/lib/me";
+import { ME, SHELL_NAME } from "@/lib/site/me";
 
 /**
  * 终端就是全站，所以它一旦抛异常整页就白了。

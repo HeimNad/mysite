@@ -1,9 +1,9 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { getPost, readPosts } from "@/lib/content";
-import { renderMarkdown } from "@/lib/markdown";
-import { ME } from "@/lib/me";
+import { getPost, readPosts } from "@/lib/content/content";
+import { renderMarkdown } from "@/lib/content/markdown";
+import { ME } from "@/lib/site/me";
 
 type Props = { params: Promise<{ slug: string }> };
 

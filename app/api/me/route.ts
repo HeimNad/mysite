@@ -1,4 +1,4 @@
-import { ME } from "@/lib/me";
+import { ME } from "@/lib/site/me";
 
 export const dynamic = "force-static";
 

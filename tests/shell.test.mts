@@ -1,10 +1,10 @@
 // 终端内核：路径解析、管道、ls/grep/文本命令、别名。node --test 原生跑 TS
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { absPath, getNode, promptPath, resolvePath, toStatMap, type FSDir } from "./fs.ts";
-import { execute } from "./shell.ts";
-import { ME } from "./me.ts";
-import { at, ctxOf, errorOf, ROOT, runner } from "./test-fixtures.mts";
+import { absPath, getNode, promptPath, resolvePath, toStatMap, type FSDir } from "../lib/terminal/fs.ts";
+import { execute } from "../lib/terminal/shell.ts";
+import { ME } from "../lib/site/me.ts";
+import { at, ctxOf, errorOf, ROOT, runner } from "./fixtures.mts";
 
 const ctx = (cwd: string[] = at()) => ctxOf(ROOT, cwd);
 const out = runner(ROOT);
@@ -117,7 +117,7 @@ test("cd 通过 ctx 汇报新目录，且不产生输出", async () => {
 });
 
 test("padCols 按显示列数对齐，中文算两列", async () => {
-  const { displayWidth, padCols } = await import("./text.ts");
+  const { displayWidth, padCols } = await import("../lib/terminal/text.ts");
   assert.equal(displayWidth("hello"), 5);
   assert.equal(displayWidth("终端"), 4, "两个汉字占四列");
   assert.equal(displayWidth("终端 x"), 6, "中英混排");
@@ -136,7 +136,7 @@ test("posts 的中文标题按显示列数对齐，路径列不参差", async ()
       { slug: "b", title: "短", date: "2026-01-01", lang: "zh", tags: [] },
     ])
   );
-  const { displayWidth } = await import("./text.ts");
+  const { displayWidth } = await import("../lib/terminal/text.ts");
   const rows = (r.output as string).split("\n").filter((l) => l.includes("(posts/"));
   assert.equal(rows.length, 2);
   const cols = rows.map((l) => displayWidth(l.slice(0, l.indexOf("(posts/"))));
@@ -167,7 +167,7 @@ test("alias 命令列出全部别名", async () => {
 });
 
 test("别名能被 Tab 补全找到", async () => {
-  const { VISIBLE_COMMANDS } = await import("./commands.ts");
+  const { VISIBLE_COMMANDS } = await import("../lib/terminal/commands.ts");
   for (const a of ["ll", "la", "l"]) assert.ok(VISIBLE_COMMANDS.includes(a), `${a} 不在补全列表里`);
 });
 
@@ -221,7 +221,7 @@ test("sl 返回动画标记，且藏在 help 之外", async () => {
   assert.equal(r.error, undefined);
   assert.deepEqual(r.output, { render: "sl" });
 
-  const { COMMANDS } = await import("./commands.ts");
+  const { COMMANDS } = await import("../lib/terminal/commands.ts");
   assert.equal(COMMANDS.sl.hidden, true, "彩蛋不该出现在 help 里");
   assert.doesNotMatch((await out("help")) as string, /\bsl\b/);
   // 动画不是文本，接管道要报错
@@ -229,7 +229,7 @@ test("sl 返回动画标记，且藏在 help 之外", async () => {
 });
 
 test("donutFrame: 尺寸固定、确定性、会随角度变", async () => {
-  const { donutFrame } = await import("./donut.ts");
+  const { donutFrame } = await import("../lib/terminal/donut.ts");
 
   const f = donutFrame(1.0, 0.5);
   const lines = f.split("\n");
@@ -247,7 +247,7 @@ test("donutFrame: 尺寸固定、确定性、会随角度变", async () => {
 });
 
 test("donutFrame: 任何角度都不撞边框", async () => {
-  const { donutFrame } = await import("./donut.ts");
+  const { donutFrame } = await import("../lib/terminal/donut.ts");
   // 撞边说明投影系数不对，画面会被切掉一块
   for (let a = 0; a < 6.3; a += 0.3) {
     for (let b = 0; b < 6.3; b += 0.3) {

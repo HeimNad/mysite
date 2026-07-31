@@ -1,10 +1,10 @@
 // 测试共用的夹具。文件名不含 .test.mts，所以 node --test 不会把它当测试跑
 import assert from "node:assert/strict";
-import { getNode, HOME, toStatMap, toStatTree, type FSDir } from "./fs.ts";
-import { execute } from "./shell.ts";
-import { ME } from "./me.ts";
-import type { Ctx, PostMeta } from "./commands.ts";
-import type { Lang } from "./i18n.ts";
+import { getNode, HOME, toStatMap, toStatTree, type FSDir } from "../lib/terminal/fs.ts";
+import { execute } from "../lib/terminal/shell.ts";
+import { ME } from "../lib/site/me.ts";
+import type { Ctx, PostMeta } from "../lib/terminal/commands.ts";
+import type { Lang } from "../lib/site/i18n.ts";
 
 /** 测试用的树，挂在家目录下，和真实结构一致 */
 export const FIXTURE: FSDir = {

@@ -1,8 +1,8 @@
 // 命令注册表。这个文件基本上是一张表 —— 逻辑在 command-utils.ts。
 // 纯数据无 JSX、不碰 DOM，所以 node --test 能直接跑（见 shell.test.mts）
 import { absPath, getNode, HOME, isDir, resolvePath, type StatDir, type StatMap } from "./fs.ts";
-import { ME, OS_NAME, SHELL_NAME, VERSION } from "./me.ts";
-import { LANGS, pick, type Lang, type Msg } from "./i18n.ts";
+import { ME, OS_NAME, SHELL_NAME, VERSION } from "../site/me.ts";
+import { LANGS, pick, type Lang, type Msg } from "../site/i18n.ts";
 import { displayWidth, padCols } from "./text.ts";
 import {
   entries,

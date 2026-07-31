@@ -4,7 +4,7 @@
 // 换头像后重跑: npm run avatar [字符画列数]
 import sharp from "sharp";
 import { writeFileSync } from "node:fs";
-import { ME } from "../lib/me.ts"; // Node 原生剥类型，不用把名字邮箱抄第二遍
+import { ME } from "../lib/site/me.ts"; // Node 原生剥类型，不用把名字邮箱抄第二遍
 
 const SRC = "assets/avatar.jpg";
 const COLS = Number(process.argv[2]) || 40;
@@ -53,7 +53,7 @@ const blank = (runs) => runs.every((r) => r.text.trim() === "");
 while (out.length && blank(out[0])) out.shift();
 while (out.length && blank(out[out.length - 1])) out.pop();
 
-writeFileSync("lib/avatar-ascii.json", JSON.stringify(out));
+writeFileSync("components/avatar-ascii.json", JSON.stringify(out));
 for (const runs of out) console.log(runs.map((r) => r.text).join(""));
 console.log(`\n✓ lib/avatar-ascii.json (${COLS}x${out.length})`);
 

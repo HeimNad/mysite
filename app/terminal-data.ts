@@ -1,5 +1,5 @@
-import { toStatMap, toStatTree } from "@/lib/fs";
-import { contentMtimes, readPosts, readRootfs } from "@/lib/content";
+import { toStatMap, toStatTree } from "@/lib/terminal/fs";
+import { contentMtimes, readPosts, readRootfs } from "@/lib/content/content";
 
 /**
  * 终端要的那三份数据。首页和 404 页都要，所以抽出来。

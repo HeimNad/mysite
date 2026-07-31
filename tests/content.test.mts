@@ -1,12 +1,12 @@
 // 服务端：读 content/ 目录、rootfs 骨架、博客（frontmatter/markdown/RSS）、按需加载
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { getNode, isDir, toFileMap, toStatTree } from "./fs.ts";
-import { execute } from "./shell.ts";
-import { getPost, parseFrontmatter, readContent, readPosts, readRootfs } from "./content.ts";
-import { ME } from "./me.ts";
-import type { PostMeta } from "./commands.ts";
-import { at, ctxOf } from "./test-fixtures.mts";
+import { getNode, isDir, toFileMap, toStatTree } from "../lib/terminal/fs.ts";
+import { execute } from "../lib/terminal/shell.ts";
+import { getPost, parseFrontmatter, readContent, readPosts, readRootfs } from "../lib/content/content.ts";
+import { ME } from "../lib/site/me.ts";
+import type { PostMeta } from "../lib/terminal/commands.ts";
+import { at, ctxOf } from "./fixtures.mts";
 
 test("readContent 读盘：目录嵌套、剥 frontmatter、插值 {{...}}", async () => {
   const root = await readContent();
@@ -34,7 +34,7 @@ test("占位符不会渲染成 [object Object]", async () => {
 });
 
 test("双语字段必须写明取哪边，否则构建期就报错", async () => {
-  const { readContent } = await import("./content.ts");
+  const { readContent } = await import("../lib/content/content.ts");
   const { mkdtemp, writeFile, rm } = await import("node:fs/promises");
   const { tmpdir } = await import("node:os");
   const { join } = await import("node:path");
@@ -57,7 +57,7 @@ test("双语字段必须写明取哪边，否则构建期就报错", async () =>
 });
 
 test("NEXT_PUBLIC_SITE_URL 少写协议也认，写错了要说人话", async () => {
-  const { normalizeSiteUrl } = await import("./me.ts");
+  const { normalizeSiteUrl } = await import("../lib/site/me.ts");
 
   // 第一次部署就栽在这儿：填了 heimnad.com，new URL() 抛 Invalid URL，
   // 而 Next 把它报成 "Failed to collect configuration for /_not-found"
@@ -82,7 +82,7 @@ test("NEXT_PUBLIC_SITE_URL 少写协议也认，写错了要说人话", async ()
 });
 
 test("版本号来自构建，不是手写的 0.x", async () => {
-  const { VERSION, OS_NAME, SHELL_NAME, SHELL_PATH } = await import("./me.ts");
+  const { VERSION, OS_NAME, SHELL_NAME, SHELL_PATH } = await import("../lib/site/me.ts");
   // 要么是 commit hash（可带 -dirty），要么是拿不到 git 时的兜底
   assert.match(VERSION, /^([0-9a-f]{7}(-dirty)?|unknown)$/, `版本号形状不对: ${VERSION}`);
   assert.doesNotMatch(VERSION, /^\d+\.\d+/, "别退回手写版本号");
@@ -178,7 +178,7 @@ test("排序：日期倒序，同一天按文件名 —— 顺序必须可复现
 });
 
 test("frontmatter: tags / lang / updated / image / draft 都真的解析", async () => {
-  const { PRIMARY_LANG } = await import("./me.ts");
+  const { PRIMARY_LANG } = await import("../lib/site/me.ts");
   const posts = await readPosts({ drafts: true });
   const tagged = posts.find((p) => p.tags.length);
   assert.ok(tagged, "得有一篇带 tags 的，否则测不到");
@@ -235,7 +235,7 @@ test("open 只认 ~/posts 下的 md", async () => {
 });
 
 test("renderMarkdown: 代码块真的被 shiki 高亮，GFM 表格能出来", async () => {
-  const { renderMarkdown } = await import("./markdown.ts");
+  const { renderMarkdown } = await import("../lib/content/markdown.ts");
   const html = await renderMarkdown(
     ["```ts", "const x: number = 1;", "```", "", "| a | b |", "| - | - |", "| 1 | 2 |"].join("\n")
   );
@@ -245,7 +245,7 @@ test("renderMarkdown: 代码块真的被 shiki 高亮，GFM 表格能出来", as
 });
 
 test("renderMarkdown: 配置里声明的语言都能高亮", async () => {
-  const { renderMarkdown } = await import("./markdown.ts");
+  const { renderMarkdown } = await import("../lib/content/markdown.ts");
   // 少声明一种语言 shiki 会静默不高亮，这里逐个盯着
   for (const lang of ["ts", "tsx", "js", "bash", "python", "c", "json", "css", "html", "md"]) {
     const html = await renderMarkdown(`\`\`\`${lang}\nx\n\`\`\``);
@@ -270,7 +270,7 @@ test("posts 命令：列标题日期，空列表有话说", async () => {
 });
 
 test("RSS: 标题里的 & < > 不能破坏 XML", async () => {
-  const { buildFeed } = await import("./feed.ts");
+  const { buildFeed } = await import("../lib/content/feed.ts");
   const xml = buildFeed([
     {
       slug: "x",
@@ -298,7 +298,7 @@ test("RSS: 标题里的 & < > 不能破坏 XML", async () => {
 });
 
 test("RSS: 真实文章能生成合法 feed", async () => {
-  const { buildFeed } = await import("./feed.ts");
+  const { buildFeed } = await import("../lib/content/feed.ts");
   const xml = buildFeed(await readPosts());
   assert.match(xml, /<item>/, "应该有文章条目");
   assert.equal(
@@ -328,7 +328,7 @@ test("toFileMap: 每个文件一条，路径是绝对 segment 拼的", async () 
 });
 
 test("预热包含所有常用文件，但不含文章", async () => {
-  const { HOME, toFileMap } = await import("./fs.ts");
+  const { HOME, toFileMap } = await import("../lib/terminal/fs.ts");
   const all = toFileMap(await readRootfs());
   const postsPrefix = [...HOME, "posts"].join("/") + "/";
 

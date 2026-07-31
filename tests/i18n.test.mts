@@ -1,15 +1,15 @@
 // 双语：译文完整性、lang 命令、浏览器语言探测、内容的按文件回退
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { toFileMap } from "./fs.ts";
-import { execute } from "./shell.ts";
-import { readRootfs } from "./content.ts";
-import { ME } from "./me.ts";
-import { detectLang, type Lang } from "./i18n.ts";
-import { at, ctxOf, ROOT } from "./test-fixtures.mts";
+import { toFileMap } from "../lib/terminal/fs.ts";
+import { execute } from "../lib/terminal/shell.ts";
+import { readRootfs } from "../lib/content/content.ts";
+import { ME } from "../lib/site/me.ts";
+import { detectLang, type Lang } from "../lib/site/i18n.ts";
+import { at, ctxOf, ROOT } from "./fixtures.mts";
 
 test("每条命令的 desc/usage/man 都有英文，且不是照抄中文", async () => {
-  const { COMMANDS } = await import("./commands.ts");
+  const { COMMANDS } = await import("../lib/terminal/commands.ts");
   const CJK = /[一-鿿]/;
   for (const [name, cmd] of Object.entries(COMMANDS)) {
     for (const [field, msg] of [

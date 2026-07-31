@@ -1,5 +1,5 @@
 // RSS 的 XML 构造。放在 lib 里而不是 route 里，这样能测
-import { ME, SITE_URL } from "./me.ts";
+import { ME, SITE_URL } from "../site/me.ts";
 import type { Post } from "./content.ts";
 
 /** XML 里这五个字符必须转义，否则标题里一个 & 就能让整个 feed 解析失败 */

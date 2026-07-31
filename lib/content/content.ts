@@ -1,9 +1,9 @@
 // 读 content/ 目录。只在服务端跑（构建期）
 import { readdir, readFile, stat } from "node:fs/promises";
 import path from "node:path";
-import type { FSDir } from "./fs.ts";
-import { ME, PRIMARY_LANG } from "./me.ts";
-import { LANGS, type Lang } from "./i18n.ts";
+import type { FSDir } from "../terminal/fs.ts";
+import { ME, PRIMARY_LANG } from "../site/me.ts";
+import { LANGS, type Lang } from "../site/i18n.ts";
 import { mountRootfs } from "./rootfs.ts";
 
 const CONTENT_DIR = path.join(process.cwd(), "content");

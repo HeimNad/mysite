@@ -1,5 +1,5 @@
-import { readPosts } from "@/lib/content";
-import { buildFeed } from "@/lib/feed";
+import { readPosts } from "@/lib/content/content";
+import { buildFeed } from "@/lib/content/feed";
 
 export const dynamic = "force-static"; // 构建期生成，不要每次请求都读盘
 

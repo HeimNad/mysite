@@ -1,5 +1,5 @@
-import { toFileMap } from "@/lib/fs";
-import { readRootfs } from "@/lib/content";
+import { toFileMap } from "@/lib/terminal/fs";
+import { readRootfs } from "@/lib/content/content";
 
 // 构建期把每个文件生成成静态资源。运行时没有服务端代码在跑，
 // 所以不存在的路径自然 404 —— 路径穿越无从下手

@@ -1,5 +1,5 @@
-import { HOME, toFileMap } from "@/lib/fs";
-import { readRootfs } from "@/lib/content";
+import { HOME, toFileMap } from "@/lib/terminal/fs";
+import { readRootfs } from "@/lib/content/content";
 
 // 构建期生成。客户端登录后在后台取一次，把常用文件灌进缓存 ——
 // 这样 cat 不用等一次往返，而首屏 HTML 又不必背着所有正文

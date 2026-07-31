@@ -1,7 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Geist_Mono } from "next/font/google";
 import { Analytics } from "@vercel/analytics/next";
-import { ME, SITE_URL } from "@/lib/me";
+import { ME, SITE_URL } from "@/lib/site/me";
 import { DEFAULT_HTML_LANG, PreferencesScript } from "./preferences";
 import "./globals.css";
 

@@ -32,13 +32,13 @@ npm run build
 
 | 想改什么 | 改哪里 |
 |---|---|
-| 名字 / 邮箱 / GitHub | `lib/me.ts` |
+| 名字 / 邮箱 / GitHub | `lib/site/me.ts` |
 | 终端里的文件 | 往 `content/` 里丢文件，`ls`/`cat`/Tab 补全自动认 |
 | 写文章 | `content/posts/*.md`，自动出现在 `/posts` 和 RSS 里 |
 | 换头像 | 覆盖 `assets/avatar.jpg`，然后 `npm run avatar` |
 | `/etc`、`/bin` 里那些玩笑 | `lib/rootfs.ts` |
 
-内容文件里可以写 `{{name}}` `{{email}}` `{{github}}` 引用 `lib/me.ts` 的值，
+内容文件里可以写 `{{name}}` `{{email}}` `{{github}}` 引用 `lib/site/me.ts` 的值，
 所以邮箱这种东西只需要在一个地方维护。双语字段要写明取哪边：`{{title.zh}}`。
 
 文章的 frontmatter 支持这些字段，**全部可选**：
@@ -50,7 +50,7 @@ npm run build
 | `updated` | 最后更新日期，文章页显示 `↻` | 不显示 |
 | `description` | `<meta>` 和 OG 卡片的摘要 | 正文第一段，截到 150 字 |
 | `tags` | 逗号分隔。终端里 `posts <标签>` 可筛 | 无 |
-| `lang` | `zh` / `en`。和界面语言不同时会标出来 | `lib/me.ts` 的 `PRIMARY_LANG` |
+| `lang` | `zh` / `en`。和界面语言不同时会标出来 | `lib/site/me.ts` 的 `PRIMARY_LANG` |
 | `image` | 这篇单独的 OG 图 | 站点那张 |
 | `draft` | `true` 则不发布 | `false` |
 
@@ -75,13 +75,20 @@ frontmatter 解析器是故意写笨的，**只认单行 `key: value`**，不认
 ## 架构
 
 ```
-lib/fs.ts         路径解析（. .. ~ /）+ 目录树类型。纯函数
-lib/commands.ts   命令注册表。纯逻辑，不碰 window/document
-lib/shell.ts      管道执行器
-lib/content.ts    读 content/ 目录（服务端）
-lib/rootfs.ts     /etc /bin /var 等骨架，content/ 挂在 /home/<user>
-app/terminal.tsx  唯一的客户端组件：输入、历史、补全、渲染
+app/              只有 Next：路由、layout、页面装配、Route Handler
+components/       客户端 UI：终端本体 + neofetch/sl/donut 三个视觉组件
+lib/
+  terminal/       纯逻辑，浏览器和 Node 里都能跑：commands, shell, fs, text, donut
+  content/        只在服务端／构建期：读盘、frontmatter、markdown、RSS
+  site/           两边共用的配置：me.ts（改这个）、i18n.ts
+tests/            单元测试，node --test 原生跑 TS
+e2e/              Playwright，只测浏览器里才验证得了的东西
 ```
+
+`lib/terminal` 和 `lib/site` 不许 import React、Next、`node:*`，也不许碰
+`window`/`document`/`localStorage` 这些浏览器全局。**这条边界由 eslint 强制**
+（`no-restricted-imports` 管模块，`no-restricted-globals` 管全局变量 —— 少一条
+就漏），`node --test` 是第二道行为层面的验证。
 
 几个刻意的决定：
 
@@ -148,7 +155,7 @@ npm run build
 npm run avatar     # regenerate ASCII art, icons and the OG image from assets/avatar.jpg
 ```
 
-**Changing content requires no code.** `lib/me.ts` holds the name, email and
+**Changing content requires no code.** `lib/site/me.ts` holds the name, email and
 GitHub URL; drop files into `content/` and `ls`/`cat`/Tab completion pick them up;
 `content/posts/*.md` become articles automatically. Content files may use
 `{{name}}`, `{{email}}` and `{{github}}` placeholders; bilingual fields need a
@@ -163,7 +170,7 @@ Article frontmatter, all fields optional:
 | `updated` | Last-modified date, shown with `↻` | Not shown |
 | `description` | `<meta>` and OG summary | First paragraph, cut at 150 chars |
 | `tags` | Comma separated; `posts <tag>` filters by them | None |
-| `lang` | `zh` / `en`, flagged when it differs from the UI | `PRIMARY_LANG` in `lib/me.ts` |
+| `lang` | `zh` / `en`, flagged when it differs from the UI | `PRIMARY_LANG` in `lib/site/me.ts` |
 | `image` | Per-article OG image | The site's |
 | `draft` | `true` withholds it | `false` |
 
@@ -176,7 +183,8 @@ no YAML arrays or nesting. Reach for gray-matter when that stops being enough.
 
 A few decisions worth knowing about:
 
-- **The command layer has no JSX and never touches the DOM.** Every side effect —
+- **The command layer has no JSX and never touches the DOM,** and eslint enforces
+  that rather than trusting it — Every side effect —
   changing directory, clearing the screen, opening a tab, switching theme or
   locale, reading a file — arrives through a `Ctx` callback. The cost is one layer
   of indirection; the payoff is that `node --test` runs the whole command layer,

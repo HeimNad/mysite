@@ -1,7 +1,7 @@
 // 命令共用的逻辑。抽出来是为了让 commands.ts 只剩那张表 —— 逻辑和数据是两回事。
 // 这里 import 的 Ctx 是纯类型，运行期会被抹掉，所以和 commands.ts 之间没有循环依赖
 import { getNode, HOME, isDir, resolvePath, type FileStat, type StatDir } from "./fs.ts";
-import { ME } from "./me.ts";
+import { ME } from "../site/me.ts";
 import type { Ctx } from "./commands.ts";
 
 const MONTHS = "Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec".split(" ");

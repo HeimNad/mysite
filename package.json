@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "tsc --noEmit && node --test lib/*.test.mts",
+    "test": "tsc --noEmit && node --test tests/*.test.mts",
     "avatar": "node scripts/gen-avatar.mjs",
     "e2e": "playwright test"
   },

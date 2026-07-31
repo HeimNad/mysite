@@ -1,5 +1,5 @@
 import { terminalProps } from "./terminal-data";
-import Terminal from "./terminal";
+import Terminal from "@/components/terminal";
 
 export const metadata = { title: "404" };
 

@@ -1,5 +1,5 @@
 // 假文件系统的路径逻辑。纯函数，无 React 依赖 —— 见 shell.test.mts
-import { ME } from "./me.ts";
+import { ME } from "../site/me.ts";
 
 /**
  * 目录树，叶子类型可变：

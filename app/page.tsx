@@ -1,9 +1,9 @@
 import Link from "next/link";
-import { getNode, HOME } from "@/lib/fs";
-import { readPosts, readRootfs } from "@/lib/content";
-import { ME } from "@/lib/me";
+import { getNode, HOME } from "@/lib/terminal/fs";
+import { readPosts, readRootfs } from "@/lib/content/content";
+import { ME } from "@/lib/site/me";
 import { terminalProps } from "./terminal-data";
-import Terminal from "./terminal";
+import Terminal from "@/components/terminal";
 
 // 服务端组件：构建期读 content/，但只把目录结构发给客户端 ——
 // 文件正文由 cat 通过 /api/fs 按需取，首页 payload 不随文章数量增长

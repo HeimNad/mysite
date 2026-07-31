@@ -1,4 +1,4 @@
-import { PRIMARY_LANG } from "@/lib/me";
+import { PRIMARY_LANG } from "@/lib/site/me";
 
 export const LANG_KEY = "lang";
 export const THEME_KEY = "theme";

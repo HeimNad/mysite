@@ -3,9 +3,9 @@
 // 这些文件的内容中英各写一份，放在同一个文件里 —— 而不是搞 /etc/motd.en 那套。
 // 理由：它们已经是按需加载的，双语不占首屏；而 /api/fs 的端点是按路径静态生成的，
 // 让内容随语言变就得把语言塞进路径，为几个玩笑文件不值得
-import type { FSDir } from "./fs.ts";
-import { ME, OS_NAME, SHELL_PATH, VERSION } from "./me.ts";
-import { ALIASES, COMMANDS } from "./commands.ts";
+import type { FSDir } from "../terminal/fs.ts";
+import { ME, OS_NAME, SHELL_PATH, VERSION } from "../site/me.ts";
+import { ALIASES, COMMANDS } from "../terminal/commands.ts";
 
 /** /bin 从命令注册表生成，这样加了新命令它自己会长出来，不会过期 */
 function bin(): FSDir {

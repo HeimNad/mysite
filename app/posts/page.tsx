@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { readPosts } from "@/lib/content";
-import { ME } from "@/lib/me";
+import { readPosts } from "@/lib/content/content";
+import { ME } from "@/lib/site/me";
 
 export const metadata: Metadata = {
   title: "文章 / Articles",
