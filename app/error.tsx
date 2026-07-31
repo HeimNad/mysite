@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
-import { ME } from "@/lib/me";
+import { ME, SHELL_NAME } from "@/lib/me";
 
 /**
  * 终端就是全站，所以它一旦抛异常整页就白了。
@@ -22,7 +22,7 @@ export default function Error({
     <div id="terminal">
       <div className="line">
         <span className="prompt">{`${ME.user}@${ME.host}:~$ `}</span>
-        mysite-sh
+        {SHELL_NAME}
       </div>
       <div className="line err">Segmentation fault (core dumped)</div>
       <div className="line">

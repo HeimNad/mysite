@@ -35,6 +35,8 @@ test("neofetch: 字段名保持英文，只有值跟着语言变", async () => {
     });
 
   const zh = await info("zh");
+  assert.match(zh, /OS:\s+FakeOS \S+ \(浏览器里的假 Linux\)/);
+  assert.match(zh, /Shell:\s+hnsh \S+/);
   // 字段名不该被翻译成中文 —— 没人把 Shell 叫"外壳"
   for (const label of ["OS:", "Host:", "Shell:", "Uptime:", "Locale:"]) {
     assert.ok(zh.includes(label), `中文模式下也该用英文字段名 ${label}`);
@@ -43,7 +45,7 @@ test("neofetch: 字段名保持英文，只有值跟着语言变", async () => {
   assert.match(zh, new RegExp(ME.title.zh), "值要跟着语言变");
 
   const en = await info("en");
-  assert.match(en, /OS:\s+Fake Linux/);
+  assert.match(en, /OS:\s+FakeOS \S+ \(a fake Linux/);
   assert.match(en, new RegExp(ME.title.en));
   assert.doesNotMatch(en, CJK, `neofetch 英文面板里混着中文:\n${en}`);
 });

@@ -4,7 +4,7 @@
 // 理由：它们已经是按需加载的，双语不占首屏；而 /api/fs 的端点是按路径静态生成的，
 // 让内容随语言变就得把语言塞进路径，为几个玩笑文件不值得
 import type { FSDir } from "./fs.ts";
-import { ME } from "./me.ts";
+import { ME, OS_NAME, SHELL_PATH, VERSION } from "./me.ts";
 import { ALIASES, COMMANDS } from "./commands.ts";
 
 /** /bin 从命令注册表生成，这样加了新命令它自己会长出来，不会过期 */
@@ -13,7 +13,7 @@ function bin(): FSDir {
   for (const [name, cmd] of Object.entries(COMMANDS)) {
     if (name === ":q") continue; // 不是合法文件名
     out[name] = [
-      "#!/bin/mysite-sh",
+      `#!${SHELL_PATH}`,
       `# ${cmd.desc.zh}`,
       `# ${cmd.desc.en}`,
       "#",
@@ -45,12 +45,13 @@ your browser. Everything is read-only, so poke around.
 
 help lists what works. lang en switches to English.`,
       passwd: `root:x:0:0:root:/root:/bin/nologin
-${ME.user}:x:1000:1000:${ME.name}:/home/${ME.user}:/bin/mysite-sh
+${ME.user}:x:1000:1000:${ME.name}:/home/${ME.user}:${SHELL_PATH}
 nobody:x:65534:65534:every project has a nobody to blame / 每个项目都有个背锅的:/nonexistent:/bin/false`,
-      "os-release": `NAME="浏览器里的假 Linux"
-PRETTY_NAME="Fake Linux (in a browser tab)"
-VERSION="0.5 (双语版)"
-ID=mysite
+      "os-release": `NAME="${OS_NAME}"
+PRETTY_NAME="${OS_NAME} ${VERSION} (浏览器里的假 Linux)"
+VERSION="${VERSION}"
+VERSION_ID="${VERSION}"
+ID=fakeos
 HOME_URL="${ME.github}"`,
     },
     // .bashrc 从 ALIASES 生成，所以里面写的每一条都真的能用，也不会和实现脱节

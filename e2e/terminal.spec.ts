@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
 
 // 这些路径只有真浏览器验证得了。之前每一个 UI bug 都出在这一层，
-// 而 lib/ 的 48 个单测一个都覆盖不到
+// 而 lib/ 的单测一个都覆盖不到
 test.use({ locale: "zh-CN" });
 
 const term = (page: import("@playwright/test").Page) => ({
@@ -109,7 +109,7 @@ test("lang 切换会被记住", async ({ page }) => {
   await expect(log).toContainText("Language switched to English.");
 
   await page.reload();
-  await expect(term(page).log).toContainText("Welcome to Fake Linux");
+  await expect(term(page).log).toContainText("Welcome to FakeOS");
   await expect(page.locator("html")).toHaveAttribute("lang", "en");
 });
 
@@ -126,6 +126,6 @@ test.describe("英文浏览器", () => {
 
   test("自动进英文，不需要先学会敲 lang", async ({ page }) => {
     await page.goto("/");
-    await expect(page.getByRole("log")).toContainText("Welcome to Fake Linux");
+    await expect(page.getByRole("log")).toContainText("Welcome to FakeOS");
   });
 });

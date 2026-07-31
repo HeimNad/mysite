@@ -16,3 +16,11 @@ export const ME = {
 
 /** sitemap 和 OG 图需要绝对 URL。有域名后设 NEXT_PUBLIC_SITE_URL 环境变量 */
 export const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
+
+/** 这台"机器"自己的名字。shell 名照 Unix 的规矩：全小写、短 */
+export const OS_NAME = "FakeOS";
+export const SHELL_NAME = "hnsh";
+export const SHELL_PATH = `/bin/${SHELL_NAME}`;
+
+/** 版本号由 next.config.ts 在构建期算出来，是 commit hash 而不是手写的 0.x */
+export const VERSION = process.env.NEXT_PUBLIC_BUILD_VERSION ?? "unknown";

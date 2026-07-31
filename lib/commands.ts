@@ -1,7 +1,7 @@
 // 命令注册表。这个文件基本上是一张表 —— 逻辑在 command-utils.ts。
 // 纯数据无 JSX、不碰 DOM，所以 node --test 能直接跑（见 shell.test.mts）
 import { absPath, getNode, HOME, isDir, resolvePath, type StatDir, type StatMap } from "./fs.ts";
-import { ME } from "./me.ts";
+import { ME, OS_NAME, SHELL_NAME, VERSION } from "./me.ts";
 import { LANGS, pick, type Lang, type Msg } from "./i18n.ts";
 import { displayWidth, padCols } from "./text.ts";
 import {
@@ -221,8 +221,8 @@ export const COMMANDS: Record<string, Cmd> = {
 
       return [
         ctx.t(
-          `欢迎来到浏览器里的假 Linux (mysite-sh 0.5)`,
-          `Welcome to Fake Linux, in a browser tab (mysite-sh 0.5)`
+          `欢迎来到 ${OS_NAME} ${VERSION}`,
+          `Welcome to ${OS_NAME} ${VERSION}`
         ),
         "",
         ` * Manual:   man <${ctx.t("命令", "command")}>`,
@@ -498,9 +498,9 @@ export const COMMANDS: Record<string, Cmd> = {
         info: [
           `${ME.user}@${ME.host}`,
           "─".repeat(ME.user.length + ME.host.length + 1),
-          pad("OS:") + ctx.t("浏览器里的假 Linux", "Fake Linux, in a browser tab"),
+          pad("OS:") + `${OS_NAME} ${VERSION} ` + ctx.t("(浏览器里的假 Linux)", "(a fake Linux in a browser tab)"),
           pad("Host:") + `${ME.name} — ${pick(ME.title, ctx.lang)}`,
-          pad("Shell:") + "mysite-sh 0.5",
+          pad("Shell:") + `${SHELL_NAME} ${VERSION}`,
           pad("Uptime:") + `${uptime}s`,
           pad("Locale:") + `${ctx.lang} ${ctx.t("(lang en 切英文)", "(lang zh for Chinese)")}`,
           pad("Email:") + ME.email,

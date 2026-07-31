@@ -56,6 +56,23 @@ test("双语字段必须写明取哪边，否则构建期就报错", async () =>
   }
 });
 
+test("版本号来自构建，不是手写的 0.x", async () => {
+  const { VERSION, OS_NAME, SHELL_NAME, SHELL_PATH } = await import("./me.ts");
+  // 要么是 commit hash（可带 -dirty），要么是拿不到 git 时的兜底
+  assert.match(VERSION, /^([0-9a-f]{7}(-dirty)?|unknown)$/, `版本号形状不对: ${VERSION}`);
+  assert.doesNotMatch(VERSION, /^\d+\.\d+/, "别退回手写版本号");
+
+  // 旧名字不该在任何地方留下
+  const files = toFileMap(await readRootfs());
+  for (const [path, body] of Object.entries(files))
+    assert.doesNotMatch(body, /mysite-sh/, `/${path} 里还留着旧的 shell 名`);
+
+  assert.equal(SHELL_PATH, `/bin/${SHELL_NAME}`);
+  assert.match(files["etc/os-release"], new RegExp(`NAME="${OS_NAME}"`));
+  assert.match(files["etc/passwd"], new RegExp(SHELL_PATH));
+  assert.match(files[`bin/ls`], new RegExp(`^#!${SHELL_PATH}`));
+});
+
 test("命令在真实 rootfs 上跑得通", async () => {
   const root = await readRootfs();
   const real = async (cmd: string, cwd: string[] = at()) => {
