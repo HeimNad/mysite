@@ -7,6 +7,7 @@ import {
 } from "@/lib/fs";
 import { VISIBLE_COMMANDS, type Ctx, type PostMeta } from "@/lib/commands";
 import { loginDate } from "@/lib/command-utils";
+import { LANG_KEY, THEME_KEY } from "./preferences";
 import { detectLang, type Lang } from "@/lib/i18n";
 import { donutFrame } from "@/lib/donut";
 import { execute } from "@/lib/shell";
@@ -167,12 +168,24 @@ export default function Terminal({
     }
   }
 
+  /** 换主题：和语言一样要记住，否则刷新或跳到文章页就丢了 */
+  function toggleTheme() {
+    const el = document.documentElement;
+    const next = el.dataset.theme === "amber" ? "" : "amber";
+    el.dataset.theme = next;
+    try {
+      localStorage.setItem(THEME_KEY, next);
+    } catch {
+      // 隐私模式下记不住，但当前这一页仍然生效
+    }
+  }
+
   /** 换语言：记住选择，同时更新 <html lang> 让读屏软件跟上 */
   function setLang(next: Lang) {
     setLangState(next);
     document.documentElement.lang = next === "zh" ? "zh-CN" : "en";
     try {
-      localStorage.setItem("lang", next);
+      localStorage.setItem(LANG_KEY, next);
     } catch {
       // 隐私模式下 localStorage 会抛，记不住就算了，不该因此崩掉
     }
@@ -227,10 +240,7 @@ export default function Terminal({
       clear: onClear,
       // 在按键处理里调用，算用户手势，不会被弹窗拦截
       openUrl: (url) => window.open(url, "_blank", "noopener"),
-      toggleTheme: () => {
-        const el = document.documentElement;
-        el.dataset.theme = el.dataset.theme === "amber" ? "" : "amber";
-      },
+      toggleTheme,
       read: readFile,
       http: fetchPath,
       lang: langNow,
@@ -405,7 +415,7 @@ export default function Terminal({
           return null; // 隐私模式下会抛
         }
       };
-      const saved = readStore("lang");
+      const saved = readStore(LANG_KEY);
       const initial: Lang =
         saved === "zh" || saved === "en"
           ? saved

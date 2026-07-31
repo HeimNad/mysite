@@ -59,9 +59,15 @@ export default async function PostPage({ params }: Props) {
       </nav>
       <div dangerouslySetInnerHTML={{ __html: html }} />
       <footer className="prose-footer">
-        <Link href="/posts">← 所有文章 / all articles</Link>
+        <Link href="/posts">
+          <span className="zh">← 所有文章</span>
+          <span className="en">← All articles</span>
+        </Link>
         {" · "}
-        <Link href="/">回到终端 / back to the terminal</Link>
+        <Link href="/">
+          <span className="zh">回到终端</span>
+          <span className="en">Back to the terminal</span>
+        </Link>
       </footer>
     </article>
   );

@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Geist_Mono } from "next/font/google";
 import { Analytics } from "@vercel/analytics/next";
 import { ME, SITE_URL } from "@/lib/me";
+import { DEFAULT_HTML_LANG, PreferencesScript } from "./preferences";
 import "./globals.css";
 
 const geistMono = Geist_Mono({
@@ -30,7 +31,12 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="zh-CN" className={geistMono.variable}>
+    // suppressHydrationWarning：内联脚本会在 React 之前改掉 lang 和 data-theme，
+    // 服务端渲染的值和客户端不一致是预期内的
+    <html lang={DEFAULT_HTML_LANG} className={geistMono.variable} suppressHydrationWarning>
+      <head>
+        <PreferencesScript />
+      </head>
       <body>
         {children}
         {/* 只统计页面浏览，不种 cookie、不跨站跟踪，所以不需要同意横幅。

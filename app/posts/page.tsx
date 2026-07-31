@@ -22,19 +22,22 @@ export default async function PostsIndex() {
       </nav>
 
       <h1>
-        文章 <span className="dim">/ Articles</span>
+        <span className="zh">文章</span>
+        <span className="en">Articles</span>
       </h1>
 
       {posts.length === 0 ? (
         <p>
-          还没写。往 content/posts/ 里丢一个 .md 就有了。
-          <br />
-          <span className="dim">Nothing yet. Drop a .md into content/posts/.</span>
+          <span className="zh">还没写。往 content/posts/ 里丢一个 .md 就有了。</span>
+          <span className="en">Nothing yet. Drop a .md into content/posts/.</span>
         </p>
       ) : (
         <>
           {posts.every((p) => p.lang === "zh") && (
-            <p className="dim">文章目前只有中文 / The articles are in Chinese only for now.</p>
+            <p className="dim">
+              <span className="zh">文章目前只有中文。</span>
+              <span className="en">The articles are in Chinese only for now.</span>
+            </p>
           )}
           <ul className="post-list">
             {posts.map((p) => (

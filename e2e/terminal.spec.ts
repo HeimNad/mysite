@@ -134,6 +134,37 @@ test("donut 真的在转，不是一张静态图", async ({ page }) => {
   expect(await donut.textContent()).not.toBe(first);
 });
 
+test("语言选择会带到静态页上", async ({ page }) => {
+  await boot(page);
+  await run(page, "lang en");
+  await expect(term(page).log).toContainText("Language switched");
+
+  // 文章列表是静态页，以前中英并排 —— 现在跟着 <html lang> 只显示一种
+  await page.goto("/posts");
+  await expect(page.locator("html")).toHaveAttribute("lang", "en");
+  // toHaveText 读的是 textContent，隐藏元素也算进去 —— 得直接断可见性
+  await expect(page.locator("h1 .en")).toBeVisible();
+  await expect(page.locator("h1 .zh")).toBeHidden();
+
+  // 但两种语言都得留在 HTML 里，爬虫和禁用 JS 的人才看得到
+  await expect(page.locator("h1 .zh")).toHaveText("文章");
+});
+
+test("主题跨页面和刷新都保持住", async ({ page }) => {
+  const html = page.locator("html");
+  await boot(page);
+  await expect(html).not.toHaveAttribute("data-theme", "amber");
+
+  await run(page, "theme");
+  await expect(html).toHaveAttribute("data-theme", "amber");
+
+  // 以前 toggleTheme 只改 DOM 不存盘，刷新和跳页都会丢
+  await page.reload();
+  await expect(html).toHaveAttribute("data-theme", "amber");
+  await page.goto("/posts");
+  await expect(html).toHaveAttribute("data-theme", "amber");
+});
+
 test.describe("英文浏览器", () => {
   test.use({ locale: "en-US" });
 

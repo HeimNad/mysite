@@ -194,3 +194,9 @@ pre { font: inherit; }
   font-size: 0.8rem;
 }
 .post-list p { margin: 0.5rem 0 0; color: var(--dim); font-size: 0.95rem; }
+
+/* ---------- 静态页的双语文案 ----------
+   两种语言都渲染进 HTML（爬虫和禁用 JS 的人都看得到），
+   由 <html lang> 决定显示哪一种。lang 由 PreferencesScript 在首帧前设好 */
+:root:lang(zh-CN) .en,
+:root:lang(en) .zh { display: none; }
