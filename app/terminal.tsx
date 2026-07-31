@@ -124,10 +124,13 @@ export default function Terminal({
   root,
   posts,
   stats,
+  mode = "login",
 }: {
   root: StatDir;
   posts: PostMeta[];
   stats: StatMap;
+  /** notFound 时开场换成一条 shell 报错，提示符照样能用 */
+  mode?: "login" | "notFound";
 }) {
   const [lines, setLines] = useState<ReactNode[]>([]);
   const [input, setInput] = useState("");
@@ -432,6 +435,31 @@ export default function Terminal({
         }
       } catch {
         // 存坏了就当没有，不值得为此中断启动
+      }
+
+      // 404：报错用真实路径，然后把提示符交给用户 —— 它是真能用的
+      if (mode === "notFound") {
+        const path = window.location.pathname;
+        push(
+          <div className="line">
+            <span className="prompt">{prompt}</span>
+            {`cd ${path}`}
+          </div>
+        );
+        pushLine(
+          initial === "zh"
+            ? `bash: cd: ${path}: 没有那个文件或目录`
+            : `bash: cd: ${path}: No such file or directory`,
+          "err"
+        );
+        pushLine(
+          initial === "zh"
+            ? "\n这个路径不存在。不过下面这个提示符是真的 —— 试试 ls 或 posts。"
+            : "\nThat path does not exist. The prompt below is real, though — try ls or posts.",
+          "dim"
+        );
+        void warmCache();
+        return;
       }
 
       // Last login：真的是上次来的时间。第一次来就不打这行，和 lastlog 没有记录时一样

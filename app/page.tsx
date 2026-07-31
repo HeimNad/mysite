@@ -1,26 +1,24 @@
 import Link from "next/link";
-import { getNode, HOME, toStatMap, toStatTree } from "@/lib/fs";
-import { contentMtimes, readPosts, readRootfs } from "@/lib/content";
+import { getNode, HOME } from "@/lib/fs";
+import { readPosts, readRootfs } from "@/lib/content";
 import { ME } from "@/lib/me";
+import { terminalProps } from "./terminal-data";
 import Terminal from "./terminal";
 
 // 服务端组件：构建期读 content/，但只把目录结构发给客户端 ——
 // 文件正文由 cat 通过 /api/fs 按需取，首页 payload 不随文章数量增长
 export default async function Home() {
-  const [root, posts, mtimes] = await Promise.all([
+  const [terminal, root, posts] = await Promise.all([
+    terminalProps(),
     readRootfs(),
     readPosts(),
-    contentMtimes(),
   ]);
-  const meta = posts.map(({ slug, title, date, lang, tags }) => ({ slug, title, date, lang, tags }));
-  // ls -l 要的大小和时间。内容本身不发给客户端，所以大小得单独带
-  const stats = toStatMap(root, mtimes, new Date().toISOString());
   const about = getNode(root, [...HOME, "about.txt"]);
   const aboutEn = getNode(root, [...HOME, "about.en.txt"]);
 
   return (
     <>
-      <Terminal root={toStatTree(root)} posts={meta} stats={stats} />
+      <Terminal {...terminal} />
       {/* 终端要 JS 才能用，爬虫和禁用 JS 的访客至少能看到这些 */}
       <noscript>
         <div className="prose">

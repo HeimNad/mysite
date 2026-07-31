@@ -165,6 +165,24 @@ test("主题跨页面和刷新都保持住", async ({ page }) => {
   await expect(html).toHaveAttribute("data-theme", "amber");
 });
 
+test("404 报出真实路径，而且那个提示符是真能用的", async ({ page }) => {
+  await page.goto("/some/made-up/path");
+  const { log, input } = term(page);
+
+  // 以前只说"你刚才输的那个路径"，不告诉你是哪个
+  await expect(log).toContainText("/some/made-up/path");
+  await expect(log).toContainText("没有那个文件或目录");
+
+  // 以前底下是个假光标，长得像输入框但敲不进去
+  await expect(input).toBeEnabled();
+  await run(page, "whoami");
+  await expect(log).toContainText("heimnad");
+
+  // 网络请求那条路也得通（cat 要去 /api/fs 取内容）
+  await run(page, "cat about.txt");
+  await expect(log).toContainText("你好，我是");
+});
+
 test.describe("英文浏览器", () => {
   test.use({ locale: "en-US" });
 
