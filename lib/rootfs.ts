@@ -32,19 +32,18 @@ export function mountRootfs(home: FSDir): FSDir {
       motd: `欢迎来到 ${ME.host}。
 
 这台机器由一个${ME.title.zh}维护，运行在你的浏览器里。
-所有内容只读 —— 你弄不坏任何东西，放心翻。
+所有内容只读，随便翻。
 
-输入 help 看能做什么，输入 posts 看我写了什么。
+help 看能做什么，posts 看我写了什么。
 
 ---
 
 Welcome to ${ME.host}.
 
-This machine is maintained by ${ME.title.en}, and it runs entirely
-inside your browser. Everything is read-only — you cannot break
-anything, so poke around.
+This machine is maintained by ${ME.title.en} and runs entirely inside
+your browser. Everything is read-only, so poke around.
 
-Type help to see what works, or lang en if you prefer English.`,
+help lists what works. lang en switches to English.`,
       passwd: `root:x:0:0:root:/root:/bin/nologin
 ${ME.user}:x:1000:1000:${ME.name}:/home/${ME.user}:/bin/mysite-sh
 nobody:x:65534:65534:every project has a nobody to blame / 每个项目都有个背锅的:/nonexistent:/bin/false`,
@@ -60,13 +59,11 @@ HOME_URL="${ME.github}"`,
         ...home,
         ".bashrc": [
           "# ~/.bashrc",
-          "# 这里定义的别名是真的 —— 试试 ll",
-          "# These aliases are real. Try ll.",
           "",
           ...Object.entries(ALIASES).map(([k, v]) => `alias ${k}='${v}'`),
           "",
-          "# 想看头像就自己敲 neofetch，登录时不会自动糊你一屏",
-          "# Run neofetch yourself; logging in will not dump it on you.",
+          "# neofetch 没放在这里，登录时不会自动跑",
+          "# neofetch is deliberately not here, so logging in stays quiet.",
         ].join("\n"),
       },
     },
@@ -75,18 +72,16 @@ HOME_URL="${ME.github}"`,
     usr: {
       share: {
         doc: {
-          README: `这个文件系统是假的，但它的行为是真的：
-管道、cd、Tab 补全、相对路径、man page 都按 POSIX 的直觉工作。
+          README: `内容在 /home/${ME.user}，也就是 ~。cd ~ 回去。
 
-真正的内容在 /home/${ME.user}（也就是 ~）。cd ~ 回去。
+管道、cd、Tab 补全、相对路径、man page 都按 POSIX 的习惯工作。
 
 ---
 
-This filesystem is fake, but its behaviour is not: pipes, cd, Tab
-completion, relative paths and man pages all work the way POSIX
-taught you to expect.
+The content lives in /home/${ME.user}, that is, ~. Run cd ~ to get there.
 
-The actual content lives in /home/${ME.user} (that is, ~). Run cd ~ to get there.`,
+Pipes, cd, Tab completion, relative paths and man pages behave the way
+POSIX taught you to expect.`,
         },
       },
     },

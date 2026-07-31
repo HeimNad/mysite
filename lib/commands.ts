@@ -98,12 +98,12 @@ export const COMMANDS: Record<string, Cmd> = {
         ...cmds.map(([n, c]) => `  ${n.padEnd(w)}  ${pick(c.desc, ctx.lang)}`),
         "",
         ctx.t(
-          "支持管道: cat skills.txt | grep Language | wc -l",
-          "Pipes work: cat skills.txt | grep Language | wc -l"
+          "管道: cat skills.txt | grep Language | wc -l",
+          "Pipes: cat skills.txt | grep Language | wc -l"
         ),
         ctx.t(
-          "支持 cd / Tab 补全 / ↑↓ 历史 / Ctrl+L 清屏。文件系统里也许藏着点东西。",
-          "Also cd, Tab completion, ↑↓ history, Ctrl+L to clear. The filesystem hides a few things."
+          "Tab 补全，↑↓ 翻历史，Ctrl+L 清屏。文件系统里藏了点东西。",
+          "Tab completes, ↑↓ walks history, Ctrl+L clears. The filesystem hides a few things."
         ),
       ].join("\n");
     },
@@ -139,8 +139,8 @@ export const COMMANDS: Record<string, Cmd> = {
     desc: { zh: "切换语言 (zh/en)", en: "switch language (zh/en)" },
     usage: { zh: "lang [zh|en]", en: "lang [zh|en]" },
     man: {
-      zh: "不带参数显示当前语言。\n首次访问按浏览器语言自动选择，之后记住你的选择。\n只影响系统提示 —— 文章本身不翻译。",
-      en: "With no argument, print the current language.\nThe first visit follows your browser; after that your choice is remembered.\nAffects system messages only — articles are not translated.",
+      zh: "不带参数显示当前语言。\n首次访问按浏览器语言选择，之后记住。\n只影响系统提示，文章不翻译。",
+      en: "With no argument, prints the current language.\nThe first visit follows your browser; after that the choice is remembered.\nAffects system messages only; articles are not translated.",
     },
     run(args, _stdin, ctx) {
       const want = args[0];
@@ -167,8 +167,8 @@ export const COMMANDS: Record<string, Cmd> = {
     desc: { zh: "列出目录内容", en: "list directory contents" },
     usage: { zh: "ls [-al] [路径...]", en: "ls [-al] [path...]" },
     man: {
-      zh: "默认隐藏以 . 开头的文件，-a 全部列出，-l 用长格式（权限、大小、时间）。\n输出连到管道时改成一行一个，方便 ls | wc -l。\n权限位是编的 —— 这个文件系统只读，所以谁都没有 w。",
-      en: "Hides dotfiles by default; -a lists everything, -l uses the long format.\nWhen the output is a pipe, prints one entry per line so ls | wc -l works.\nThe permission bits are made up — this filesystem is read-only, so nobody gets w.",
+      zh: "默认隐藏以 . 开头的文件。-a 全部列出，-l 长格式。\n输出接管道时一行一个。\n文件系统只读，所以没有 w 位。",
+      en: "Hides dotfiles by default. -a lists everything, -l uses the long format.\nOne entry per line when the output is a pipe.\nThe filesystem is read-only, so nothing carries a w bit.",
     },
     run(args, _stdin, ctx) {
       // -al / -la 这种组合也要认
@@ -207,8 +207,8 @@ export const COMMANDS: Record<string, Cmd> = {
   motd: {
     desc: { zh: "显示登录横幅", en: "print the login banner" },
     man: {
-      zh: "登录时自动打印的那段。字段名保持英文，数字都是真的 ——\n文件数和字节数来自实际的文件系统，不是编的。",
-      en: "The block printed when you log in. Field names stay English and the\nnumbers are real — file count and size come from the actual filesystem.",
+      zh: "登录时打印的那段。随时可以再看一次。",
+      en: "The block printed at login. Run it again whenever you like.",
     },
     run(_args, _stdin, ctx) {
       const { files, bytes } = fsUsage(ctx.root, ctx.stats);
@@ -236,10 +236,7 @@ export const COMMANDS: Record<string, Cmd> = {
         row("Filesystem:", `${humanSize(bytes)} in ${files} files`, "Articles:", String(ctx.posts.length)),
         row("Commands:", `${cmds} (+${aliases} aliases)`, "Locale:", ctx.lang),
         "",
-        ctx.t(
-          "输入 help 开始探索，neofetch 看看我长什么样。管道、cd、man 都是真的。",
-          "Type help to look around, or neofetch to see my face. The pipes, cd and man pages are real."
-        ),
+        ctx.t("help 看能做什么，neofetch 看我长什么样。", "help lists what works. neofetch shows my face."),
       ].join("\n");
     },
   },
@@ -247,8 +244,8 @@ export const COMMANDS: Record<string, Cmd> = {
   alias: {
     desc: { zh: "显示命令别名", en: "show command aliases" },
     man: {
-      zh: "和真 shell 一样，别名在查命令之前就被展开了 —— ll 实际执行的是 ls -l。",
-      en: "Like a real shell, aliases are expanded before the command is looked up — ll really runs ls -l.",
+      zh: "别名在查命令之前展开，只作用于第一个词。ll 执行的是 ls -l。",
+      en: "Aliases expand before the command is looked up, and only on the first word. ll runs ls -l.",
     },
     run: () =>
       Object.entries(ALIASES)
@@ -260,8 +257,8 @@ export const COMMANDS: Record<string, Cmd> = {
     desc: { zh: "切换当前目录", en: "change the working directory" },
     usage: { zh: "cd [路径]", en: "cd [path]" },
     man: {
-      zh: `不带参数回到 ~（也就是 /home/${ME.user}）。支持 .. 和绝对路径。提示符会跟着变。`,
-      en: `With no argument, return to ~ (that is, /home/${ME.user}). Understands .. and absolute paths. The prompt follows.`,
+      zh: `不带参数回到 ~（/home/${ME.user}）。支持 .. 和绝对路径。`,
+      en: `With no argument, returns to ~ (/home/${ME.user}). Understands .. and absolute paths.`,
     },
     run(args, _stdin, ctx) {
       const segs = args[0] ? resolvePath(ctx.cwd, args[0]) : [...HOME];
@@ -285,8 +282,8 @@ export const COMMANDS: Record<string, Cmd> = {
     desc: { zh: "查看文件内容", en: "concatenate files and print" },
     usage: { zh: "cat [文件...]", en: "cat [file...]" },
     man: {
-      zh: "把文件内容输出。没给文件名就读标准输入，所以 cat 也能当管道的中转站。",
-      en: "Print file contents. With no file, read standard input — so cat also works mid-pipeline.",
+      zh: "输出文件内容。没给文件名就读标准输入。",
+      en: "Prints file contents. With no file, reads standard input.",
     },
     run: (args, stdin, ctx) => readInput(args, stdin, ctx, "cat"),
   },
@@ -295,8 +292,8 @@ export const COMMANDS: Record<string, Cmd> = {
     desc: { zh: "树状列出当前目录", en: "list the current directory as a tree" },
     usage: { zh: "tree [-a] [路径]", en: "tree [-a] [path]" },
     man: {
-      zh: "从当前目录往下画。想看全貌就 tree /，不过那个有点长。",
-      en: "Draws downward from the current directory. Try tree / for the whole thing — it is long.",
+      zh: "从当前目录往下画。tree / 是整棵。",
+      en: "Draws downward from the current directory. tree / covers the whole thing.",
     },
     run(args, _stdin, ctx) {
       const path = args.find((a) => !a.startsWith("-"));
@@ -316,8 +313,8 @@ export const COMMANDS: Record<string, Cmd> = {
     desc: { zh: "按模式筛选行", en: "print lines matching a pattern" },
     usage: { zh: "grep [-i] <模式> [文件...]", en: "grep [-i] <pattern> [file...]" },
     man: {
-      zh: "输出匹配的行。-i 忽略大小写。没给文件名就读标准输入。\n模式按正则处理，非法正则退化成普通文本匹配。",
-      en: "Print matching lines. -i ignores case. With no file, read standard input.\nThe pattern is a regex; an invalid one falls back to plain substring matching.",
+      zh: "输出匹配的行。-i 忽略大小写。没给文件名就读标准输入。\n模式按正则处理，非法正则按普通文本匹配。",
+      en: "Prints matching lines. -i ignores case. With no file, reads standard input.\nThe pattern is a regex; an invalid one is matched as plain text.",
     },
     async run(args, stdin, ctx) {
       const ignoreCase = args.includes("-i");
@@ -395,8 +392,8 @@ export const COMMANDS: Record<string, Cmd> = {
   posts: {
     desc: { zh: "列出所有文章（标题和日期）", en: "list all articles with titles and dates" },
     man: {
-      zh: "ls posts 只给你文件名，这个给标题和日期，按时间倒序。\n用 open posts/<文件> 打开排版好的版本。",
-      en: "ls posts only gives filenames; this gives titles and dates, newest first.\nUse open posts/<file> for the typeset version.",
+      zh: "列出文章的标题和日期，按时间倒序。\nopen posts/<文件> 打开渲染版。",
+      en: "Lists article titles and dates, newest first.\nopen posts/<file> for the rendered version.",
     },
     run(_args, _stdin, ctx) {
       if (!ctx.posts.length)
@@ -412,10 +409,7 @@ export const COMMANDS: Record<string, Cmd> = {
           (p) => `${p.date.padEnd(dateW)}  ${padCols(p.title, titleW)}  (posts/${p.slug}.md)`
         ),
         "",
-        ctx.t(
-          "用 open posts/<文件> 打开渲染版（有代码高亮，可以分享）。",
-          "Use open posts/<file> for the rendered version (syntax highlighting, shareable)."
-        ),
+        ctx.t("open posts/<文件> 打开渲染版。", "open posts/<file> for the rendered version."),
         ...(ctx.lang === "en" ? ["Note: the articles are in Chinese only for now."] : []),
       ].join("\n");
     },
@@ -425,8 +419,8 @@ export const COMMANDS: Record<string, Cmd> = {
     desc: { zh: "在浏览器里打开文章的渲染版", en: "open an article's rendered page in a new tab" },
     usage: { zh: "open posts/<文章>.md", en: "open posts/<article>.md" },
     man: {
-      zh: "终端里 cat 出来的是 markdown 源码。\nopen 会新标签打开排版好的文章页（有代码高亮，可以分享给别人）。\n只有 posts/ 里的 .md 有渲染页。",
-      en: "In the terminal, cat gives you the markdown source.\nopen loads the typeset page in a new tab (syntax highlighting, shareable).\nOnly .md files under posts/ have a rendered page.",
+      zh: "在新标签打开文章的渲染版。cat 给的是 markdown 源码。\n只有 posts/ 下的 .md 有渲染版。",
+      en: "Opens an article's rendered page in a new tab. cat gives you the markdown source.\nOnly .md files under posts/ have one.",
     },
     run(args, _stdin, ctx) {
       if (!args[0])
@@ -461,24 +455,21 @@ export const COMMANDS: Record<string, Cmd> = {
     usage: { zh: "curl <路径>", en: "curl <path>" },
     man: {
       zh:
-        "只能访问本站自己的接口 —— 这台机器没有对外的网络，带主机名的地址一律解析失败。\n" +
-        "能取的都是真实存在的端点，不是编出来的响应：\n" +
+        "访问本站的接口。带主机名的地址会解析失败。\n" +
         "  curl /api/me                     我的信息\n" +
         "  curl /api/posts                  文章列表\n" +
-        "  curl /api/fs/etc/motd            任意一个文件\n" +
+        "  curl /api/fs/<路径>              任意一个文件\n" +
         "  curl /feed.xml                   RSS\n" +
         "  curl /robots.txt                 robots\n" +
-        "输出可以进管道: curl /api/posts | grep title",
+        "输出可以进管道。",
       en:
-        "Only reaches this site's own endpoints — this machine has no outbound\n" +
-        "network, so anything with a hostname fails to resolve.\n" +
-        "Everything it can reach really exists; none of it is a canned response:\n" +
+        "Reaches this site's own endpoints. Anything with a hostname fails to resolve.\n" +
         "  curl /api/me                     who I am\n" +
         "  curl /api/posts                  the article list\n" +
-        "  curl /api/fs/etc/motd            any file\n" +
+        "  curl /api/fs/<path>              any file\n" +
         "  curl /feed.xml                   the RSS feed\n" +
         "  curl /robots.txt                 robots\n" +
-        "The output pipes: curl /api/posts | grep title",
+        "The output pipes.",
     },
     run(args, _stdin, ctx) {
       const target = args.find((a) => !a.startsWith("-"));
@@ -565,8 +556,8 @@ export const COMMANDS: Record<string, Cmd> = {
     desc: { zh: "一列火车经过", en: "a steam locomotive passes by" },
     hidden: true,
     man: {
-      zh: "手滑把 ls 打成 sl 的人应得的惩罚。\n没有别的用途，也不会有。",
-      en: "The punishment you deserve for typing sl instead of ls.\nIt serves no other purpose and never will.",
+      zh: "把 ls 打成 sl 的时候会看到它。没有别的用途。",
+      en: "What you get for typing sl instead of ls. It has no other purpose.",
     },
     run: (): Visual => ({ render: "sl" }),
   },
