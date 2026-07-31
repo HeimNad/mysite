@@ -453,9 +453,7 @@ export default function Terminal({
           "err"
         );
         pushLine(
-          initial === "zh"
-            ? "\n这个路径不存在。不过下面这个提示符是真的 —— 试试 ls 或 posts。"
-            : "\nThat path does not exist. The prompt below is real, though — try ls or posts.",
+          initial === "zh" ? "\nhelp 看能做什么，posts 看我写了什么。" : "\nhelp lists what works. posts shows what I have written.",
           "dim"
         );
         void warmCache();

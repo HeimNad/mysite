@@ -5,13 +5,14 @@ import type { Lang, Msg } from "./i18n.ts";
 export const ME = {
   user: "heimnad",
   host: "web",
-  name: "Heimnad",
+  name: "HeimNad",
   title: {
     zh: "热爱计算机的大学生",
     en: "a university student who likes computers",
   } satisfies Msg,
   email: "heimnad233@gmail.com",
-  github: "https://github.com/heimnad", // 改成你的
+  // user 是 unix 用户名，按惯例全小写；name 和 github 用真实写法
+  github: "https://github.com/HeimNad",
 };
 
 /**
