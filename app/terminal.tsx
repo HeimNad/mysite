@@ -8,6 +8,7 @@ import {
 import { VISIBLE_COMMANDS, type Ctx, type PostMeta } from "@/lib/commands";
 import { loginDate } from "@/lib/command-utils";
 import { detectLang, type Lang } from "@/lib/i18n";
+import { donutFrame } from "@/lib/donut";
 import { execute } from "@/lib/shell";
 import { ME } from "@/lib/me";
 import avatarAscii from "@/lib/avatar-ascii.json";
@@ -91,6 +92,29 @@ function Sl() {
   return (
     <pre className="sl" aria-label="一列火车开了过去 / a train went by">
       {[...smoke.map((s) => "      " + s), ...TRAIN].map(pad).join("\n")}
+    </pre>
+  );
+}
+
+/** 甜甜圈：角度推进由这里管，每帧的形状是 donutFrame 算的。转一阵就停，别一直烧 CPU */
+function Donut() {
+  const SPIN_MS = 12_000;
+  // 不从 (0,0) 起：那个角度环面正好侧对着看，只剩一条窄带，当第一帧太空
+  const [angle, setAngle] = useState({ a: 1.0, b: 0.5 });
+
+  useEffect(() => {
+    if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return;
+    const id = setInterval(() => setAngle((v) => ({ a: v.a + 0.07, b: v.b + 0.03 })), 50);
+    const stop = setTimeout(() => clearInterval(id), SPIN_MS);
+    return () => {
+      clearInterval(id);
+      clearTimeout(stop);
+    };
+  }, []);
+
+  return (
+    <pre className="sl" aria-label="一个旋转的甜甜圈 / a spinning donut">
+      {donutFrame(angle.a, angle.b)}
     </pre>
   );
 }
@@ -245,6 +269,7 @@ export default function Terminal({
     else if (typeof output === "string") { if (output) pushLine(output); }
     else if (output?.render === "neofetch") push(<Neofetch info={output.info} />);
     else if (output?.render === "sl") push(<Sl />);
+    else if (output?.render === "donut") push(<Donut />);
   }
 
   // Tab 补全：管道后仍然补全命令，路径相对 cwd

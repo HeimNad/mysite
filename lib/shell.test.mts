@@ -228,6 +228,40 @@ test("sl 返回动画标记，且藏在 help 之外", async () => {
   assert.match((await err("sl | wc -l"))!, /不能接管道/);
 });
 
+test("donutFrame: 尺寸固定、确定性、会随角度变", async () => {
+  const { donutFrame } = await import("./donut.ts");
+
+  const f = donutFrame(1.0, 0.5);
+  const lines = f.split("\n");
+  assert.equal(lines.length, 24);
+  for (const l of lines) assert.equal(l.length, 48, "每行都要补满，否则动画时会抖");
+
+  // 纯函数：同样的角度必须给同样的结果
+  assert.equal(donutFrame(1.0, 0.5), f);
+  assert.notEqual(donutFrame(1.6, 0.9), f, "转了角度就该不一样");
+
+  // 得画出东西来，而且有明有暗（说明光照在起作用，不是一坨实心）
+  const ink = new Set(f.replace(/[\s\n]/g, ""));
+  assert.ok(ink.size >= 5, `明暗层次太少: ${[...ink].join("")}`);
+  assert.ok([...ink].every((c) => ".,-~:;=!*#$@".includes(c)), "出现了灰阶之外的字符");
+});
+
+test("donutFrame: 任何角度都不撞边框", async () => {
+  const { donutFrame } = await import("./donut.ts");
+  // 撞边说明投影系数不对，画面会被切掉一块
+  for (let a = 0; a < 6.3; a += 0.3) {
+    for (let b = 0; b < 6.3; b += 0.3) {
+      const lines = donutFrame(a, b).split("\n");
+      assert.equal(lines[0].trim(), "", `a=${a.toFixed(1)} b=${b.toFixed(1)} 顶到第一行`);
+      assert.equal(lines[lines.length - 1].trim(), "", "顶到最后一行");
+      for (const l of lines) {
+        assert.equal(l[0], " ", "顶到第一列");
+        assert.equal(l[l.length - 1], " ", "顶到最后一列");
+      }
+    }
+  }
+});
+
 test("help 和 man 从注册表元数据生成", async () => {
   const help = await out("help") as string;
   assert.match(help, /grep/);

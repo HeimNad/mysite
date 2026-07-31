@@ -121,6 +121,19 @@ test("open 会新开一个标签打开文章", async ({ page, context }) => {
   await expect(opened).toHaveURL(/\/posts\/why-a-terminal$/);
 });
 
+test("donut 真的在转，不是一张静态图", async ({ page }) => {
+  const { log } = await boot(page);
+  await run(page, "donut");
+
+  const donut = log.locator("pre").last();
+  await expect(donut).toContainText("$");
+  const first = await donut.textContent();
+
+  // 隔几帧再看，形状必须变了 —— 只断言"画出来了"是测不到动画的
+  await page.waitForTimeout(400);
+  expect(await donut.textContent()).not.toBe(first);
+});
+
 test.describe("英文浏览器", () => {
   test.use({ locale: "en-US" });
 

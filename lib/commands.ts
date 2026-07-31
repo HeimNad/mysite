@@ -20,7 +20,10 @@ import {
  * 需要图形化渲染的输出，由 UI 层认领。
  * 文字在这里算好（所以双语和"防漏译"测试都覆盖得到），UI 只负责摆字符画
  */
-export type Visual = { render: "neofetch"; info: string[] } | { render: "sl" };
+export type Visual =
+  | { render: "neofetch"; info: string[] }
+  | { render: "sl" }
+  | { render: "donut" };
 
 /** 文章元数据。故意不含 body —— 正文按需从 /api/fs 取，别传两份 */
 export type PostMeta = { slug: string; title: string; date: string };
@@ -552,6 +555,16 @@ export const COMMANDS: Record<string, Cmd> = {
   },
 
   // ---------- 彩蛋 ----------
+  donut: {
+    desc: { zh: "转一个甜甜圈", en: "spin a donut" },
+    hidden: true,
+    man: {
+      zh: "一个三维圆环，投影成字符。旋转、透视、明暗、遮挡都是真算的，\n没有用任何图形库。转十几秒停住。",
+      en: "A three-dimensional torus projected onto characters. The rotation,\nperspective, shading and occlusion are all computed; no graphics library\nis involved. It spins for a few seconds and then holds still.",
+    },
+    run: (): Visual => ({ render: "donut" }),
+  },
+
   sl: {
     desc: { zh: "一列火车经过", en: "a steam locomotive passes by" },
     hidden: true,
