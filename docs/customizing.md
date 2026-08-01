@@ -18,8 +18,12 @@
 
 ### 占位符
 
-内容文件里可以写 `{{name}}` `{{email}}` `{{github}}`，取的是 `lib/site/me.ts`
-里的值 —— 邮箱这种东西只在一个地方维护。
+内容文件里可以写 `{{name}}` `{{email}}` `{{github}}` `{{repo}}`，取的是
+`lib/site/me.ts` 里的值 —— 邮箱这种东西只在一个地方维护。往 `ME` 加个字段，
+对应的 `{{字段名}}` 立刻就能用。
+
+`github` 和 `repo` 是两回事：前者回答"我是谁"（联系方式、`neofetch`、OG 图），
+后者回答"这个站的源码在哪"（`motd` 的 Source、项目页、`/etc/os-release`）。
 
 双语字段必须写明取哪边：`{{title.zh}}` 或 `{{title.en}}`。写成 `{{title}}`
 会在**构建期报错**，而不是渲染出 `[object Object]`。

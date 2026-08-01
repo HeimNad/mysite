@@ -1,5 +1,5 @@
 // ============ 改这个文件 + content/ 目录就是改网站 ============
-// 文件内容在 content/ 里，可以用 {{name}} {{email}} {{github}} 等占位符引用这里的值
+// 文件内容在 content/ 里，可以用 {{name}} {{email}} {{github}} {{repo}} 等占位符引用这里的值
 import type { Lang, Msg } from "./i18n.ts";
 
 export const ME = {
@@ -13,6 +13,9 @@ export const ME = {
   email: "heimnad233@gmail.com",
   // user 是 unix 用户名，按惯例全小写；name 和 github 用真实写法
   github: "https://github.com/HeimNad",
+  // 和 github 是两回事：github 回答"我是谁"（联系方式、neofetch、OG 图），
+  // repo 回答"这个站的源码在哪"（motd 的 Source、项目页、/etc/os-release）
+  repo: "https://github.com/HeimNad/mysite",
 };
 
 /**

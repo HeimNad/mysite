@@ -35,4 +35,4 @@ The parts I find interesting:
 - `ls` checks whether its output is a pipe — one entry per line when it is,
   columns when it is not, same as the real thing
 
-源码 / Source: {{github}}
+源码 / Source: {{repo}}

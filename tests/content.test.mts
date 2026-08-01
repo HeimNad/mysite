@@ -51,6 +51,11 @@ test("双语字段必须写明取哪边，否则构建期就报错", async () =>
     await writeFile(join(dir, "bad.txt"), "我是{{title.zh}}，{{nope}} 原样留着");
     const ok = await readContent(dir);
     assert.equal(ok["bad.txt"], `我是${ME.title.zh}，{{nope}} 原样留着`);
+
+    // 认不出的占位符一律原样留着 —— 曾经用 `in` 查表，
+    // {{constructor}} 会命中 Object.prototype 然后抛"不是字符串"
+    await writeFile(join(dir, "proto.txt"), "{{constructor}} {{toString}}");
+    assert.equal((await readContent(dir))["proto.txt"], "{{constructor}} {{toString}}");
   } finally {
     await rm(dir, { recursive: true, force: true });
   }

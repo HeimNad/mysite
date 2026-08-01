@@ -8,4 +8,4 @@ Try: cat skills.txt | grep Language | wc -l
   tree /    the whole filesystem
   contact   how to reach me
 
-Source: {{github}}
+Source: {{repo}}

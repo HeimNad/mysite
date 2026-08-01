@@ -52,7 +52,7 @@ PRETTY_NAME="${OS_NAME} ${VERSION} (浏览器里的假 Linux)"
 VERSION="${VERSION}"
 VERSION_ID="${VERSION}"
 ID=fakeos
-HOME_URL="${ME.github}"`,
+HOME_URL="${ME.repo}"`,
     },
     // .bashrc 从 ALIASES 生成，所以里面写的每一条都真的能用，也不会和实现脱节
     home: {

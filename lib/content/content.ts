@@ -46,7 +46,9 @@ export type Post = {
 function interpolate(text: string, where: string): string {
   return text.replace(/\{\{([\w.]+)\}\}/g, (whole, path: string) => {
     const [key, sub] = path.split(".");
-    if (!(key in ME)) return whole; // 不认识的原样留着，可能本来就是正文
+    // hasOwn 而不是 in：`in` 会命中 Object.prototype，于是 {{constructor}}
+    // 这种正文会走进取值分支抛"不是字符串"，而不是按设计原样留着
+    if (!Object.hasOwn(ME, key)) return whole; // 不认识的原样留着，可能本来就是正文
 
     const value = ME[key as keyof typeof ME];
     const picked: unknown = sub ? (value as Record<string, unknown>)?.[sub] : value;

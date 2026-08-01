@@ -246,7 +246,7 @@ export const COMMANDS: Record<string, Cmd> = {
         ` * Manual:   man <${ctx.t("命令", "command")}>`,
         ` * Articles: posts`,
         ` * Contact:  contact`,
-        ` * Source:   ${ME.github}`,
+        ` * Source:   ${ME.repo}`,
         "",
         `  System information as of ${loginDate(new Date())}`,
         "",
