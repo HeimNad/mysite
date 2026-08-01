@@ -32,10 +32,14 @@ export function resolvePath(cwd: string[], path?: string): string[] {
   return segs;
 }
 
+/**
+ * 用 hasOwn 而不是 `in`：`in` 会走原型链，于是 cd __proto__ 能"成功"进入一个
+ * 幻影目录，cat constructor 也拿得到东西。目录树是数据，不该继承 Object 的成员
+ */
 export function getNode<L>(root: Tree<L>, segs: string[]): L | Tree<L> | undefined {
   let node: L | Tree<L> = root;
   for (const s of segs) {
-    if (!isDir(node) || !(s in node)) return undefined;
+    if (!isDir(node) || !Object.hasOwn(node, s)) return undefined;
     node = node[s];
   }
   return node;

@@ -16,14 +16,16 @@ export async function execute(input: string, ctx: Omit<Ctx, "piped">): Promise<E
     for (let i = 0; i < stages.length; i++) {
       // 别名在查命令之前展开，只认第一个词 —— 和真 shell 一样。
       // 所以 ll 会变成 ls -l，再和用户自己给的参数拼起来
+      // 查表一律用 hasOwn：`ALIASES["__proto__"]` 走原型链会取到 Object.prototype，
+      // 再 .split 就抛一个泄漏内部实现的 TypeError，而不是"未找到命令"
       const tokens = stages[i].split(/\s+/).filter(Boolean);
-      if (tokens[0] && ALIASES[tokens[0]])
+      if (tokens[0] && Object.hasOwn(ALIASES, tokens[0]))
         tokens.splice(0, 1, ...ALIASES[tokens[0]].split(/\s+/));
 
       const [name, ...args] = tokens;
       if (!name)
         throw new Error(ctx.t("语法错误：管道旁边缺少命令", "syntax error: missing command near |"));
-      const cmd = COMMANDS[name];
+      const cmd = Object.hasOwn(COMMANDS, name) ? COMMANDS[name] : undefined;
       if (!cmd)
         throw new Error(
           ctx.t(

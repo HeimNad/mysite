@@ -65,6 +65,10 @@ const TRAIN = [
 ];
 const TRAIN_W = Math.max(...TRAIN.map((l) => l.length));
 const TRACK_W = 78; // 经典终端宽度，够它开一段
+const STEP_PX = 2;
+const STEP_MS = 55;
+/** 从右边缘开到完全离开左边缘要多久 —— 到点停表，别让它空转下去 */
+const RUN_MS = Math.ceil((TRACK_W + TRAIN_W) / STEP_PX) * STEP_MS;
 
 /** sl：火车从右往左开过去，开完这块自己塌掉，输出流上不留空洞 */
 export function Sl() {
@@ -73,8 +77,14 @@ export function Sl() {
   useEffect(() => {
     // 尊重系统的「减少动态效果」——静态摆一辆，别硬动
     if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return;
-    const id = setInterval(() => setX((v) => v - 2), 55);
-    return () => clearInterval(id);
+    const id = setInterval(() => setX((v) => v - STEP_PX), STEP_MS);
+    // 开过去之后必须停表：下面的 return null 只是不再渲染，组件并没有卸载，
+    // 不停的话它会一直 setState 下去，连敲几次 sl 就挂着几个永不停的定时器
+    const stop = setTimeout(() => clearInterval(id), RUN_MS);
+    return () => {
+      clearInterval(id);
+      clearTimeout(stop);
+    };
   }, []);
 
   if (x <= -TRAIN_W) return null; // 开过去了

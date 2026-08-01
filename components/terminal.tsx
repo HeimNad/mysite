@@ -233,6 +233,10 @@ export default function Terminal({
     const value = el.value;
     const caret = el.selectionStart ?? value.length;
 
+    // 输入法组合期间这些键都归输入法：回车是选词不是执行，↑↓ 是翻候选词不是翻历史。
+    // 不挡的话中文用户按回车会把半截拼音当命令跑掉
+    if (e.nativeEvent.isComposing) return;
+
     // ---- readline 键位：终端用户的肌肉记忆，按下去没反应会立刻出戏 ----
     if (e.ctrlKey && !e.altKey && !e.metaKey) {
       switch (e.key) {
@@ -275,7 +279,7 @@ export default function Terminal({
     }
 
     if (e.key === "Enter") {
-      void run(input); // 异步执行，输入框不阻塞
+      void run(value); // 异步执行，输入框不阻塞
       setInput("");
     } else if (e.key === "ArrowUp") {
       e.preventDefault();
@@ -290,7 +294,7 @@ export default function Terminal({
       }
     } else if (e.key === "Tab") {
       e.preventDefault();
-      setInput(complete(input));
+      setInput(complete(value));
     }
   }
 

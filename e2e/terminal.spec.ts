@@ -183,6 +183,33 @@ test("404 报出真实路径，而且那个提示符是真能用的", async ({ p
   await expect(log).toContainText("你好，我是");
 });
 
+// 中文输入法打拼音时，回车是"选词"、↑↓ 是"翻候选词"，都不该被终端抢走。
+// 这层只有真浏览器测得了：keydown 的 isComposing 是浏览器给的
+test("输入法组合期间的回车和方向键归输入法，不归终端", async ({ page }) => {
+  const { log, input } = await boot(page);
+  await run(page, "pwd"); // 先留一条历史，好验证 ↑ 没被抢走
+
+  const compose = (key: string) =>
+    input.evaluate((el, k) => {
+      el.dispatchEvent(
+        new KeyboardEvent("keydown", { key: k, isComposing: true, bubbles: true })
+      );
+    }, key);
+
+  await input.fill("nihao"); // 还没选词的拼音
+  await compose("Enter");
+  await expect(input, "组合中的回车不该清空输入").toHaveValue("nihao");
+  await expect(log).not.toContainText("nihao: 未找到命令");
+
+  await compose("ArrowUp");
+  await expect(input, "组合中的 ↑ 是翻候选词，不该翻出历史").toHaveValue("nihao");
+
+  // 组合结束后一切照旧
+  await input.fill("whoami");
+  await input.press("Enter");
+  await expect(log).toContainText("heimnad");
+});
+
 test("草稿在生产构建里连终端也看不见", async ({ page }) => {
   const { log } = await boot(page);
   await run(page, "ls posts");

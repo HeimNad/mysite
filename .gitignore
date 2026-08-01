@@ -44,3 +44,6 @@ next-env.d.ts
 # Playwright
 test-results/
 playwright-report/
+
+# 本地审计报告，不进仓库
+docs/audit.md

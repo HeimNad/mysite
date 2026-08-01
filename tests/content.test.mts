@@ -56,6 +56,63 @@ test("双语字段必须写明取哪边，否则构建期就报错", async () =>
   }
 });
 
+test("文件名进不了 URL 的文章，构建期就报错", async () => {
+  const { buildFeed } = await import("../lib/content/feed.ts");
+  const { getPost } = await import("../lib/content/content.ts");
+
+  // 以前 readPosts 只看 .md 后缀、getPost 另有白名单，于是「我的文章.md」
+  // 会进列表和 RSS，点开却 404 —— 现在两边同一套约束，坏名字当场炸
+  assert.equal(await getPost("我的文章"), null);
+  assert.equal(await getPost("../etc/passwd"), null, "路径穿越仍然挡住");
+
+  // RSS 的 URL 也要转义，不能只转 title
+  const xml = buildFeed([
+    {
+      slug: "a&b",
+      title: "T",
+      date: "",
+      updated: "",
+      description: "D",
+      lang: "zh",
+      tags: [],
+      image: "",
+      draft: false,
+      body: "",
+    },
+  ]);
+  assert.match(xml, /<link>[^<]*a&amp;b<\/link>/, "link 里的 & 要转义");
+  assert.doesNotMatch(xml, /<link>[^<]*a&b</, "裸 & 会让 XML 解析失败");
+});
+
+// 渲染结果直接进 dangerouslySetInnerHTML。原始 HTML 被 remark-rehype 丢掉了，
+// 但链接的 URL 不检查的话 javascript: 会原样变成可点的 href
+test("markdown 里的危险 URL scheme 在构建期就炸", async () => {
+  const { renderMarkdown } = await import("../lib/content/markdown.ts");
+
+  for (const md of [
+    "[点我](javascript:alert(1))",
+    "![x](javascript:alert(1))",
+    "[d](data:text/html,hi)",
+    "[vb](vbscript:msgbox(1))",
+  ]) {
+    await assert.rejects(() => renderMarkdown(md), /不安全的 scheme/, `没挡住: ${md}`);
+  }
+
+  // 正常链接不能被误伤
+  for (const [md, want] of [
+    ["[ok](https://example.com)", 'href="https://example.com"'],
+    ["[m](mailto:a@b.com)", 'href="mailto:a@b.com"'],
+    ["[rel](/posts/x)", 'href="/posts/x"'],
+    ["[a](#s)", 'href="#s"'],
+    ["![i](/x.png)", 'src="/x.png"'],
+  ]) {
+    assert.match(await renderMarkdown(md), new RegExp(want.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+  }
+
+  // 代码高亮走的是同一条管线，别把 shiki 一起挡掉
+  assert.match(await renderMarkdown("```ts\nconst a = 1;\n```"), /class="shiki/);
+});
+
 test("NEXT_PUBLIC_SITE_URL 少写协议也认，写错了要说人话", async () => {
   const { normalizeSiteUrl } = await import("../lib/site/me.ts");
 

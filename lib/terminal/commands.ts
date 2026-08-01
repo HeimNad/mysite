@@ -127,7 +127,8 @@ export const COMMANDS: Record<string, Cmd> = {
         throw new Error(
           ctx.t("你想读哪一页？用法: man <命令>", "What manual page do you want? Usage: man <command>")
         );
-      const cmd = COMMANDS[name];
+      // hasOwn：man constructor 走原型链会取到 Object 构造函数，然后读 desc.zh 炸掉
+      const cmd = Object.hasOwn(COMMANDS, name) ? COMMANDS[name] : undefined;
       if (!cmd) throw new Error(ctx.t(`没有 ${name} 的手册页`, `No manual entry for ${name}`));
       return [
         "NAME",
@@ -180,8 +181,15 @@ export const COMMANDS: Record<string, Cmd> = {
       en: "Hides dotfiles by default. -a lists everything, -l uses the long format.\nOne entry per line when the output is a pipe.\nThe filesystem is read-only, so nothing carries a w bit.",
     },
     run(args, _stdin, ctx) {
-      // -al / -la 这种组合也要认
-      const flags = args.filter((a) => a.startsWith("-")).join("");
+      // 只认短 flag，-al / -la 这种组合照样认。以前是把所有 - 开头的拼起来找 a 和 l，
+      // 于是 --all 里那两个字母都被当成 flag，ls --all 会连长格式一起打开
+      const opts = args.filter((a) => a.startsWith("-"));
+      const bad = opts.find((o) => !/^-[al]+$/.test(o));
+      if (bad)
+        throw new Error(
+          ctx.t(`ls: 无法识别的选项 '${bad}'`, `ls: unrecognized option '${bad}'`)
+        );
+      const flags = opts.join("");
       const showAll = flags.includes("a");
       const long = flags.includes("l");
       const paths = args.filter((a) => !a.startsWith("-"));
@@ -197,16 +205,17 @@ export const COMMANDS: Record<string, Cmd> = {
                 `ls: cannot access '${p}': No such file or directory`
               )
             );
-          if (!isDir(node)) return p!;
+          // 参数是文件时 -l 一样要给长格式，真 ls 就是这样
+          if (!isDir(node))
+            return long ? longLine(p!, node, ctx.stats[segs.join("/")]) : p!;
           const names = entries(node, showAll);
+          const listed = names.map((n) => n + (isDir(node[n]) ? "/" : ""));
           const body = long
             ? [
                 `total ${names.length}`,
                 ...names.map((n) => longLine(n, node[n], ctx.stats[[...segs, n].join("/")])),
               ].join("\n")
-            : ctx.piped
-              ? names.map((n) => n + (isDir(node[n]) ? "/" : "")).join("\n")
-              : names.map((n) => n + (isDir(node[n]) ? "/" : "")).join("  ");
+            : listed.join(ctx.piped ? "\n" : "  ");
           return targets.length > 1 ? `${p}:\n${body}` : body;
         })
         .join("\n\n");

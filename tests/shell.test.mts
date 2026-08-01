@@ -102,6 +102,22 @@ test("错误：不存在的命令/文件、cd 到文件、管道接非文本输�
   assert.match((await err("wc"))!, /缺少文件名/, "没有 stdin 也没有文件时要报错");
 });
 
+// 查表用 `in` / 直接索引会走原型链：曾经 cd __proto__ 能进一个幻影目录，
+// 而 __proto__ / constructor 当命令敲会吐一句泄漏内部实现的英文 TypeError
+test("原型链上的属性不是命令，也不是文件", async () => {
+  for (const name of ["__proto__", "constructor", "toString", "hasOwnProperty"]) {
+    assert.match((await err(name))!, /未找到命令/, `${name} 不该被当成命令`);
+    assert.match((await err(`man ${name}`))!, /没有 .* 的手册页/, `man ${name} 不该炸`);
+    assert.match(
+      (await err(`cd ${name}`))!,
+      /没有那个文件或目录/,
+      `cd ${name} 不该进到幻影目录`
+    );
+    assert.match((await err(`cat ${name}`))!, /没有那个文件或目录/);
+    assert.match((await err(`ls ${name}`))!, /没有那个文件或目录/);
+  }
+});
+
 test("cd 通过 ctx 汇报新目录，且不产生输出", async () => {
   const landing = async (cmd: string, cwd = at()) => {
     let landed: string[] | null = null;
@@ -196,6 +212,28 @@ test("ls -l: 大小是真的，目录和文件的权限位不同", async () => {
   assert.match(fileRow, /^-r--r--r-- {2}1 heimnad heimnad {5}16 Jul 29 20:33 a\.txt$/);
   assert.match(dirRow, /^dr-xr-xr-x/, "目录要有 d 和 x 位");
   assert.doesNotMatch(rows.join("\n"), /w/, "整个文件系统只读，不该有 w 权限位");
+});
+
+test("ls 只认短 flag，长选项不该被拆成字母", async () => {
+  // 曾经是把 - 开头的参数拼起来找 a/l，于是 --all 里的 a 和 l 都算数，
+  // ls --all 会连长格式一起打开
+  assert.match((await err("ls --all"))!, /无法识别的选项 '--all'/);
+  assert.match((await err("ls --long"))!, /无法识别的选项 '--long'/);
+  assert.match((await err("ls -x"))!, /无法识别的选项 '-x'/);
+
+  // 短 flag 和组合仍然照常
+  assert.equal(await out("ls"), "a.txt  dir/");
+  assert.match((await out("ls -a")) as string, /\.hidden/);
+  assert.match((await out("ls -la")) as string, /^total/);
+});
+
+test("ls -l 给单个文件也要出长格式", async () => {
+  // 以前参数是文件时直接原样回显文件名，-l 被吞掉
+  assert.match(
+    (await out("ls -l a.txt")) as string,
+    /^-r--r--r-- {2}1 heimnad heimnad {5}16 Jul 29 20:33 a\.txt$/
+  );
+  assert.equal(await out("ls a.txt"), "a.txt", "不带 -l 时还是只回显名字");
 });
 
 test("ls -l 的目录有真实时间，不是 epoch", async () => {

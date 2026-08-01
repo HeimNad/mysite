@@ -11,6 +11,13 @@ export const POSTS_DIR = path.join(CONTENT_DIR, "posts");
 
 export type DraftOpts = { drafts?: boolean };
 
+/**
+ * slug 要能安全地进 URL、XML 和静态路径表。约束只在这里定义一次 ——
+ * 曾经 readPosts 只看 .md 后缀而 getPost 另有一套白名单，于是
+ * `我的文章.md` 会进列表、RSS 和 sitemap，点开却是 404
+ */
+const SLUG_RE = /^[\w-]+$/;
+
 export type Post = {
   slug: string;
   title: string;
@@ -186,6 +193,14 @@ async function readPost(file: string): Promise<Post> {
 export async function readPosts(opts: DraftOpts = {}): Promise<Post[]> {
   const withDrafts = opts.drafts ?? draftsVisible();
   const files = (await readdir(POSTS_DIR)).filter((f) => f.endsWith(".md"));
+
+  // 坏文件名当场炸，不静默跳过：悄悄消失的文章比构建失败难查得多
+  const bad = files.filter((f) => !SLUG_RE.test(f.replace(/\.md$/, "")));
+  if (bad.length)
+    throw new Error(
+      `content/posts/ 里的文件名只能用字母、数字、_ 和 -（要进 URL）：${bad.join(", ")}`
+    );
+
   const all = await Promise.all(files.map(readPost));
   return all
     .filter((p) => withDrafts || !p.draft)
@@ -194,7 +209,7 @@ export async function readPosts(opts: DraftOpts = {}): Promise<Post[]> {
 
 export async function getPost(slug: string): Promise<Post | null> {
   // 挡掉 ../ 之类的路径穿越 —— slug 来自 URL，是不可信输入
-  if (!/^[\w-]+$/.test(slug)) return null;
+  if (!SLUG_RE.test(slug)) return null;
   try {
     const post = await readPost(`${slug}.md`);
     // 草稿不能靠直接猜 URL 访问，否则 draft 等于没挡
