@@ -13,7 +13,9 @@ heimnad@web:~$ cat skills.txt | grep Language | wc -l
 同一份 `content/` 目录有两种呈现：终端里 `cat` 出来是 markdown 源码，
 浏览器里 `/posts/<slug>` 是排版好的文章页（代码高亮、OG 卡片、RSS）。
 
-*[English](#english) below — 简介和上手指南。深入的文档只有中文。*
+界面中英双语，首次访问跟浏览器走，`lang en` / `lang zh` 切换并记住。
+
+*[English](#english) below.*
 
 ## 快速开始
 
@@ -28,50 +30,16 @@ npm run dev
 已经放开了私有网段 —— 不放开的话 dev server 会拦掉所有 `/_next/*` 请求，
 页面只剩个不能输入的提示符。
 
-## 自定义
+## 文档
 
-**改内容不用碰代码。**
-
-| 想改什么 | 改哪里 |
+| | |
 |---|---|
-| 名字 / 邮箱 / GitHub | `lib/site/me.ts` |
-| 终端里的文件 | 往 `content/` 里丢文件，`ls`/`cat`/Tab 补全自动认 |
-| 写文章 | `content/posts/*.md`，自动出现在 `/posts` 和 RSS 里 |
-| 换头像 | 覆盖 `assets/avatar.jpg`，然后 `npm run avatar` |
-| `/etc`、`/bin` 里那些玩笑 | `lib/content/rootfs.ts` |
+| **[docs/customizing.md](docs/customizing.md)** | 改成你自己的：内容、文章、加命令、加彩蛋 |
+| **[docs/architecture.md](docs/architecture.md)** | 为什么这么写，以及每个决定的代价 |
 
-内容文件里可以写 `{{name}}` `{{email}}` `{{github}}` 引用 `lib/site/me.ts` 的值，
-所以邮箱这种东西只需要在一个地方维护。双语字段要写明取哪边：`{{title.zh}}`。
-
-### 文章的 frontmatter
-
-全部可选：
-
-| 字段 | 作用 | 缺省 |
-|---|---|---|
-| `title` | 标题 | 正文第一个 `#`，再退回文件名 |
-| `date` | 发表日期 `YYYY-MM-DD`，用于排序 | 空（排最后） |
-| `updated` | 最后更新日期，文章页显示 `↻` | 不显示 |
-| `description` | `<meta>` 和 OG 卡片的摘要 | 正文第一段，截到 150 字 |
-| `tags` | 逗号分隔。终端里 `posts <标签>` 可筛 | 无 |
-| `lang` | `zh` / `en`。和界面语言不同时会标出来 | `lib/site/me.ts` 的 `PRIMARY_LANG` |
-| `image` | 这篇单独的 OG 图 | 站点那张 |
-| `draft` | `true` 则不发布 | `false` |
-
-```yaml
----
-title: 为什么我的网站是个终端
-date: 2026-07-29
-tags: 终端, Next.js
-draft: true
----
-```
-
-草稿在 `npm run dev` 下能看见方便预览，生产构建里读不到 —— 列表、RSS、sitemap
-里都没有，直接猜 URL 也进不去。
-
-解析器**只认单行 `key: value`**，不认 YAML 数组和嵌套。`tags` 用逗号分隔
-（写成 `[a, b]` 也认）。真需要完整 YAML 的时候再引入 gray-matter。
+最短路径：改 `lib/site/me.ts` 里的名字邮箱，把 `content/` 里的文字换成你的，
+`npm run avatar` 换头像。加一条命令是往 `lib/terminal/commands.ts` 加四行，
+`help`、`man`、Tab 补全、`/bin` 和管道会自动带上它。
 
 ## 常用命令
 
@@ -100,11 +68,6 @@ content/          你的 markdown 和资料文本，独立于代码
 
 `lib/terminal` 和 `lib/site` 是**跨运行时的纯逻辑**，`lib/content` 只在服务端用。
 前两者不许依赖 React、Next、`node:*` 或浏览器全局，**这条边界由 eslint 强制**。
-
-两个由此而来的设计：**命令返回文本而不是自己打印**（所以管道能成立），
-**副作用全部通过 `Ctx` 回调注入**（所以 `node --test` 能跑整个命令层）。
-
-其余决策和它们的代价：**[docs/architecture.md](docs/architecture.md)**
 
 ## 部署
 
@@ -154,30 +117,22 @@ anything else in a second window: `npm test`, `npm run e2e`, `npm run build`,
 
 ### Making it yours
 
-`lib/site/me.ts` holds the name, email and GitHub URL. Drop files into
-`content/` and `ls`/`cat`/Tab completion pick them up; `content/posts/*.md`
-become articles automatically. Content files may use `{{name}}`, `{{email}}`
-and `{{github}}` placeholders — bilingual fields need a language, as in
-`{{title.en}}`.
+Edit `lib/site/me.ts` for your name and email, replace the prose in `content/`,
+and run `npm run avatar` after swapping `assets/avatar.jpg`. Adding a command is
+four lines in `lib/terminal/commands.ts` — `help`, `man`, Tab completion, `/bin`
+and pipes all pick it up on their own.
 
-Article frontmatter is all optional: `title`, `date`, `updated`, `description`,
-`tags`, `lang`, `image`, `draft`. Drafts are visible under `npm run dev` and
-absent from a production build — no listing, RSS or sitemap entry, and guessing
-the URL gets a 404.
-
-Set `NEXT_PUBLIC_SITE_URL` when you deploy, or the sitemap, RSS and OG links
-will point at localhost.
-
-### Layout
-
-`app/` is Next and nothing else. `components/` holds the client UI.
 `lib/terminal` and `lib/site` are cross-runtime pure logic — no React, no Next,
-no `node:`, no browser globals, and eslint enforces that. `lib/content` runs
-only at build time.
+no `node:`, no browser globals, and eslint enforces that. `lib/content` runs only
+at build time.
 
-The design notes live in [docs/architecture.md](docs/architecture.md), in
-Chinese. Keeping one language complete rather than two half-synchronised is
-deliberate: this file drifted once already.
+The guides are in Chinese: [customizing](docs/customizing.md) covers making it
+yours, [architecture](docs/architecture.md) covers why it is built this way.
+Keeping one language complete rather than two half-synchronised is deliberate:
+this file drifted once already.
+
+Set `NEXT_PUBLIC_SITE_URL` when you deploy, or the sitemap, RSS and OG links will
+point at localhost.
 
 The code is free to reuse. The prose in `content/` and the avatar in `assets/`
 are mine — please don't.

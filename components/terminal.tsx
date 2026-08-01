@@ -8,7 +8,7 @@ import {
 import { VISIBLE_COMMANDS, type Ctx, type PostMeta } from "@/lib/terminal/commands";
 import { loginDate } from "@/lib/terminal/command-utils";
 import { LANG_KEY, THEME_KEY } from "@/app/preferences";
-import { Donut, linkify, Neofetch, Sl } from "@/components/terminal-visuals";
+import { linkify, renderVisual } from "@/components/terminal-visuals";
 import { detectLang, type Lang } from "@/lib/site/i18n";
 import { execute } from "@/lib/terminal/shell";
 import { ME } from "@/lib/site/me";
@@ -173,9 +173,8 @@ export default function Terminal({
     if (cleared) return setLines([]);
     if (error) pushLine(error, "err");
     else if (typeof output === "string") { if (output) pushLine(output); }
-    else if (output?.render === "neofetch") push(<Neofetch info={output.info} />);
-    else if (output?.render === "sl") push(<Sl />);
-    else if (output?.render === "donut") push(<Donut />);
+    // 图形输出由 terminal-visuals 认领 —— 这里不需要知道有哪些变体
+    else if (output) push(renderVisual(output));
   }
 
   // Tab 补全：管道后仍然补全命令，路径相对 cwd

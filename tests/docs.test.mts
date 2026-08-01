@@ -4,7 +4,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { existsSync, readFileSync } from "node:fs";
 
-const DOCS = ["README.md", "docs/architecture.md"];
+const DOCS = ["README.md", "docs/architecture.md", "docs/customizing.md"];
 
 /**
  * 只检查带 / 的路径：`about.txt` 这种裸文件名在文中是省略写法，
@@ -32,12 +32,16 @@ for (const doc of DOCS) {
   });
 }
 
-test("README 不该重新长回架构长文", () => {
+test("README 只做介绍和指路，细节留在 docs/", () => {
   const readme = readFileSync("README.md", "utf8");
-  // 深层设计说明搬去了 docs/architecture.md，README 只留指路
+  // 定制细节在 docs/customizing.md，设计决策在 docs/architecture.md，
+  // README 只负责"这是什么"和"从哪进去"
+  assert.match(readme, /docs\/customizing\.md/, "README 得指向定制文档");
   assert.match(readme, /docs\/architecture\.md/, "README 得指向架构文档");
+
+  // 上限跟着实际长度收紧过一次：留太多余量它就拦不住任何东西
   assert.ok(
-    readme.length < 7000,
-    `README 有 ${readme.length} 字符，太长了 —— 深层内容该进 docs/architecture.md`
+    readme.length < 5500,
+    `README 有 ${readme.length} 字符，太长了 —— 细节该进 docs/`
   );
 });

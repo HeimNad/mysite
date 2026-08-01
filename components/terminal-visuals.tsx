@@ -2,10 +2,33 @@
 
 import { useEffect, useState, type ReactNode } from "react";
 import { donutFrame } from "@/lib/terminal/donut";
+import type { Visual } from "@/lib/terminal/commands";
 import avatarAscii from "@/components/avatar-ascii.json";
 
 // 终端里那些不是纯文本的输出：命令返回一个标记，由这里认领渲染。
 // 文字都在命令层算好（所以双语和防漏译的测试覆盖得到），这里只负责摆
+
+/**
+ * Visual → 组件。认领表放在组件旁边，terminal.tsx 因此不必知道有哪些变体。
+ *
+ * default 里那行 never 是关键：给 Visual 加了新变体却忘了在这里认领时，
+ * 它编译不过。以前这里是 terminal.tsx 里一串 else if，漏一个不会报错 ——
+ * 命令能跑、返回了标记、屏幕上什么都不出现，只能等谁敲到那条命令才发现
+ */
+export function renderVisual(v: Visual): ReactNode {
+  switch (v.render) {
+    case "neofetch":
+      return <Neofetch info={v.info} />;
+    case "sl":
+      return <Sl />;
+    case "donut":
+      return <Donut />;
+    default: {
+      const missing: never = v;
+      return missing;
+    }
+  }
+}
 
 const PALETTE = ["#f85149", "#39d353", "#ffd75f", "#58a6ff", "#bc8cff", "#39c5cf", "#c9d1d9"];
 
