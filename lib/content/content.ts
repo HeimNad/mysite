@@ -9,6 +9,8 @@ import { mountRootfs } from "./rootfs.ts";
 const CONTENT_DIR = path.join(process.cwd(), "content");
 export const POSTS_DIR = path.join(CONTENT_DIR, "posts");
 
+export type DraftOpts = { drafts?: boolean };
+
 export type Post = {
   slug: string;
   title: string;
@@ -69,9 +71,17 @@ export function parseFrontmatter(text: string): {
   return { meta, body: text.slice(m[0].length).trim() };
 }
 
+/**
+ * 草稿只在 dev 下可见。生产构建里它必须从每一条路径上消失 ——
+ * 不只是文章列表，还有终端的文件树和 /api/fs 那些静态端点
+ */
+export function draftsVisible(): boolean {
+  return process.env.NODE_ENV === "development";
+}
+
 /** 完整的假文件系统：content/ 挂在 /home/<user>，外面套一层 Linux 骨架 */
-export async function readRootfs(): Promise<FSDir> {
-  return mountRootfs(await readContent());
+export async function readRootfs(opts: DraftOpts = {}): Promise<FSDir> {
+  return mountRootfs(await readContent(CONTENT_DIR, [], opts));
 }
 
 /**
@@ -96,8 +106,10 @@ export async function contentMtimes(
 /** content/ 目录本身：只要正文，frontmatter 在终端里显示没意义 */
 export async function readContent(
   dir = CONTENT_DIR,
-  prefix: string[] = []
+  prefix: string[] = [],
+  opts: DraftOpts = {}
 ): Promise<FSDir> {
+  const withDrafts = opts.drafts ?? draftsVisible();
   const entries = (await readdir(dir, { withFileTypes: true }))
     .filter((e) => e.name !== ".DS_Store") // macOS 的垃圾，别让它出现在 ls -a 里
     .sort((a, b) => a.name.localeCompare(b.name));
@@ -106,9 +118,14 @@ export async function readContent(
   for (const e of entries) {
     const full = path.join(dir, e.name);
     const segs = [...prefix, e.name];
-    out[e.name] = e.isDirectory()
-      ? await readContent(full, segs)
-      : interpolate(parseFrontmatter(await readFile(full, "utf8")).body, segs.join("/"));
+    if (e.isDirectory()) {
+      out[e.name] = await readContent(full, segs, opts);
+      continue;
+    }
+    const { meta, body } = parseFrontmatter(await readFile(full, "utf8"));
+    // 草稿连文件本身都不该出现：ls 看不见，cat 不到，/api/fs 也不会为它生成端点
+    if (!withDrafts && parseBool(meta.draft)) continue;
+    out[e.name] = interpolate(body, segs.join("/"));
   }
   return out;
 }
@@ -166,8 +183,8 @@ async function readPost(file: string): Promise<Post> {
  *
  * 草稿默认读不到。dev 下能看见，方便边写边预览
  */
-export async function readPosts(opts: { drafts?: boolean } = {}): Promise<Post[]> {
-  const withDrafts = opts.drafts ?? process.env.NODE_ENV === "development";
+export async function readPosts(opts: DraftOpts = {}): Promise<Post[]> {
+  const withDrafts = opts.drafts ?? draftsVisible();
   const files = (await readdir(POSTS_DIR)).filter((f) => f.endsWith(".md"));
   const all = await Promise.all(files.map(readPost));
   return all
@@ -181,7 +198,7 @@ export async function getPost(slug: string): Promise<Post | null> {
   try {
     const post = await readPost(`${slug}.md`);
     // 草稿不能靠直接猜 URL 访问，否则 draft 等于没挡
-    if (post.draft && process.env.NODE_ENV !== "development") return null;
+    if (post.draft && !draftsVisible()) return null;
     return post;
   } catch {
     return null;

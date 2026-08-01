@@ -183,6 +183,17 @@ test("404 报出真实路径，而且那个提示符是真能用的", async ({ p
   await expect(log).toContainText("你好，我是");
 });
 
+test("草稿在生产构建里连终端也看不见", async ({ page }) => {
+  const { log } = await boot(page);
+  await run(page, "ls posts");
+  await expect(log).toContainText("why-a-terminal.md");
+  await expect(log).not.toContainText("_draft");
+
+  // 直接 cat 也不行 —— 文件根本不在树里
+  await run(page, "cat posts/_draft-example.md");
+  await expect(log).toContainText("没有那个文件或目录");
+});
+
 test.describe("英文浏览器", () => {
   test.use({ locale: "en-US" });
 

@@ -163,6 +163,31 @@ test("draft: 生产读不到，显式要才给，猜 URL 也进不去", async ()
   assert.equal(await getPost(one.slug), null, "草稿不该能靠猜 slug 访问到");
 });
 
+test("草稿在生产构建里从每一条路径上消失", async () => {
+  const { toFileMap, toStatTree } = await import("../lib/terminal/fs.ts");
+
+  const drafts = (await readPosts({ drafts: true })).filter((p) => p.draft);
+  assert.ok(drafts.length > 0, "得有一篇草稿样例，否则这条测试是空的");
+
+  // 曾经的洞：只在 readPosts 上过滤了，而终端文件树走 readContent，照单全收 ——
+  // /api/fs/.../<草稿>.md 在线上是 200，ls posts 也看得见
+  const published = toFileMap(await readRootfs({ drafts: false }));
+  for (const d of drafts) {
+    for (const p of Object.keys(published))
+      assert.doesNotMatch(p, new RegExp(d.slug), `草稿 ${d.slug} 还在 /${p}`);
+    for (const body of Object.values(published))
+      assert.doesNotMatch(body, /^# 这是一篇草稿/m, `草稿正文漏进了 /api/fs`);
+  }
+
+  // 结构树（发给客户端的那份）同样不能有
+  const tree = JSON.stringify(toStatTree(await readRootfs({ drafts: false })));
+  for (const d of drafts) assert.doesNotMatch(tree, new RegExp(d.slug), "结构树里还有草稿");
+
+  // 显式要的时候要给得出来，否则 dev 下没法预览
+  const all = toFileMap(await readRootfs({ drafts: true }));
+  assert.ok(Object.keys(all).some((p) => p.includes(drafts[0].slug)), "dev 下该看得见");
+});
+
 test("排序：日期倒序，同一天按文件名 —— 顺序必须可复现", async () => {
   const posts = await readPosts({ drafts: true });
   for (let i = 1; i < posts.length; i++) {
