@@ -61,11 +61,12 @@ console.log(`\n✓ components/avatar-ascii.json (${COLS}x${out.length})`);
 // ---------- 2. 圆形图标 ----------
 const WHITE = { r: 255, g: 255, b: 255, alpha: 1 };
 
+// dest-in 遮罩：图标和 OG 头像的圆形裁剪用的是同一个形状，只是尺寸不同
+const circleMask = (size) =>
+  Buffer.from(`<svg width="${size}" height="${size}"><circle cx="${size / 2}" cy="${size / 2}" r="${size / 2}"/></svg>`);
+
 async function icon(size, dest) {
-  const r = size / 2;
-  const mask = Buffer.from(
-    `<svg width="${size}" height="${size}"><circle cx="${r}" cy="${r}" r="${r}"/></svg>`
-  );
+  const mask = circleMask(size);
   // 缩到圆的内接方形（≈0.707）再留一点边，否则耳朵和爪子会被圆周切掉。
   // trim 先去掉原图四周的纯白，猫才够大 —— 16px 下要认得出来
   const inner = Math.round(size * 0.68);
@@ -99,14 +100,7 @@ async function ogImage(dest) {
   const avatar = await sharp(SRC)
     .trim({ threshold: 10 })
     .resize(AVATAR, AVATAR, { fit: "contain", background: WHITE })
-    .composite([
-      {
-        input: Buffer.from(
-          `<svg width="${AVATAR}" height="${AVATAR}"><circle cx="${AVATAR / 2}" cy="${AVATAR / 2}" r="${AVATAR / 2}"/></svg>`
-        ),
-        blend: "dest-in",
-      },
-    ])
+    .composite([{ input: circleMask(AVATAR), blend: "dest-in" }])
     .png()
     .toBuffer();
 
