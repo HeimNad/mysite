@@ -4,6 +4,7 @@ import { getNode, HOME, toStatMap, toStatTree, type FSDir } from "../lib/termina
 import { execute } from "../lib/terminal/shell.ts";
 import { ME } from "../lib/site/me.ts";
 import type { Ctx, PostMeta } from "../lib/terminal/commands.ts";
+import { INIT_PID, type Proc } from "../lib/terminal/procs.ts";
 import type { Lang } from "../lib/site/i18n.ts";
 
 /** 测试用的树，挂在家目录下，和真实结构一致 */
@@ -20,6 +21,9 @@ export const at = (...rest: string[]) => [...HOME, ...rest];
 /** 固定时间，让 ls -l 的断言可重复 */
 export const FIXED_TIME = "2026-07-29T20:33:00.000Z";
 
+/** 固定的单调时钟读数，ps 的 ELAPSED 断言靠它可重复 */
+export const FIXED_NOW = 83_000; // 1 分 23 秒
+
 /**
  * 从完整树造出 ctx：结构树给命令，read 直接从完整树取 ——
  * 生产环境这一步是 fetch /api/fs，行为等价
@@ -30,11 +34,26 @@ export function ctxOf(
   posts: PostMeta[] = [],
   lang: Lang = "zh",
   /** 已装的包。默认什么都没装，和新访客一致 */
-  pkgs: Map<string, string> = new Map()
+  pkgs: Map<string, string> = new Map(),
+  /** 正在跑的进程。默认只有 shell 自己，和刚开页面一致 */
+  procs: Proc[] = [{ pid: INIT_PID, cmd: "hnsh", startedAt: 0 }],
+  /** kill 掉的 pid 和 panic 的消息记在这里，供断言 */
+  killed: number[] = [],
+  panics: string[] = []
 ): Omit<Ctx, "piped"> {
   return {
     pkgs,
     asRoot: false,
+    // 进程表：测试里给一个可控的表，kill 记下被杀的 pid 供断言
+    procs,
+    kill: (pid) => {
+      killed.push(pid);
+      const i = procs.findIndex((p) => p.pid === pid);
+      if (i >= 0) procs.splice(i, 1);
+    },
+    // 固定时钟，ELAPSED 的断言才可重复
+    now: () => FIXED_NOW,
+    panic: (m) => panics.push(m),
     // 测试里不发请求，直接把内容塞进去，并报一个固定的字节数和耗时
     install: async (name) => {
       const body = `installed:${name}`;

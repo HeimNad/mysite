@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, ReactNode, useEffect, useRef, useState } from "react";
+import { Fragment, ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import {
   getNode, HOME, isDir, promptPath, resolvePath,
   type StatDir, type StatMap,
@@ -9,10 +9,11 @@ import { visibleCommands, type Ctx, type PostMeta } from "@/lib/terminal/command
 import { PACKAGES } from "@/lib/terminal/packages";
 import { loginDate } from "@/lib/terminal/command-utils";
 import { LANG_KEY, THEME_KEY } from "@/app/preferences";
-import { linkify, renderVisual } from "@/components/terminal-visuals";
+import { linkify, renderVisual, type ProcTable } from "@/components/terminal-visuals";
+import { INIT_PID, type Proc } from "@/lib/terminal/procs";
 import { detectLang, type Lang } from "@/lib/site/i18n";
 import { execute } from "@/lib/terminal/shell";
-import { ME } from "@/lib/site/me";
+import { ME, SHELL_NAME } from "@/lib/site/me";
 
 export default function Terminal({
   root,
@@ -41,6 +42,11 @@ export default function Terminal({
   const booted = useRef(false);
   // 读过的文件缓存起来，同一个文件不会请求两次
   const fileCache = useRef(new Map<string, string>());
+  // 真在跑的定时器。ps 读它，kill 调它的 stop —— 不需要重渲染，所以放 ref
+  const procTable = useRef(new Map<number, Proc & { stop: () => void }>());
+  const nextPid = useRef(INIT_PID + 1);
+  // 设了就在下一次渲染时抛，交给 error.tsx —— kill -9 1 的下场
+  const [panic, setPanic] = useState<string | null>(null);
 
   const prompt = `${ME.user}@${ME.host}:${promptPath(cwd)}$ `;
 
@@ -159,6 +165,21 @@ export default function Terminal({
     }
   }
 
+  /** 动画用它登记自己。名字就是 ps 的 CMD 列 */
+  const procs: ProcTable = useMemo(
+    () => ({
+      spawn(cmd, stop) {
+        const pid = nextPid.current++;
+        procTable.current.set(pid, { pid, cmd, startedAt: performance.now(), stop });
+        return pid;
+      },
+      exit(pid) {
+        procTable.current.delete(pid);
+      },
+    }),
+    []
+  );
+
   /** curl 用：取本站某个路径。非 2xx 按 curl -f 的说法报错，不然会吐出一整页 404 HTML */
   async function fetchPath(path: string): Promise<string> {
     const res = await fetch(path);
@@ -188,6 +209,20 @@ export default function Terminal({
       pkgs,
       install: installPkg,
       asRoot: false,
+      // 1 号进程是 shell 自己。起点是 0 —— performance.now() 本来就从页面加载起算，
+      // 所以 ps 里它的 ELAPSED 就是这一页开了多久，是真的
+      procs: [
+        { pid: INIT_PID, cmd: SHELL_NAME, startedAt: 0 },
+        ...[...procTable.current.values()].map(({ pid, cmd, startedAt }) => ({ pid, cmd, startedAt })),
+      ],
+      kill: (pid) => {
+        const p = procTable.current.get(pid);
+        if (!p) return;
+        p.stop();
+        procTable.current.delete(pid);
+      },
+      now: () => performance.now(),
+      panic: setPanic,
     };
   }
 
@@ -217,7 +252,7 @@ export default function Terminal({
     if (error) pushLine(error, "err");
     else if (typeof output === "string") { if (output) pushLine(output); }
     // 图形输出由 terminal-visuals 认领 —— 这里不需要知道有哪些变体
-    else if (output) push(renderVisual(output));
+    else if (output) push(renderVisual(output, procs));
   }
 
   // Tab 补全：管道后仍然补全命令，路径相对 cwd
@@ -434,6 +469,9 @@ export default function Terminal({
     // 默认的 block:"start" 会把提示符顶到屏幕上方，把已有输出推出视口
     endRef.current?.scrollIntoView({ block: "end" });
   }, [lines]);
+
+  // 渲染期抛才会被 error.tsx 接住 —— 命令层的异常会被 shell 的 try/catch 吃掉
+  if (panic) throw new Error(panic);
 
   return (
     <div

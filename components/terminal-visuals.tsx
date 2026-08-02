@@ -1,9 +1,20 @@
 "use client";
 
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { donutFrame } from "@/lib/terminal/donut";
 import type { Visual } from "@/lib/terminal/commands";
 import avatarAscii from "@/components/avatar-ascii.json";
+
+/**
+ * 动画把自己登记成进程，ps 列的就是这些。kill 调用 stop 真的把定时器停掉 ——
+ * 表活在 UI 层是因为定时器在这里，命令层只拿到快照和一个回调
+ */
+export type ProcTable = {
+  /** 登记一个正在跑的东西，返回 pid */
+  spawn: (cmd: string, stop: () => void) => number;
+  /** 自然结束或被卸载时注销 */
+  exit: (pid: number) => void;
+};
 
 // 终端里那些不是纯文本的输出：命令返回一个标记，由这里认领渲染。
 // 文字都在命令层算好（所以双语和防漏译的测试覆盖得到），这里只负责摆
@@ -15,14 +26,14 @@ import avatarAscii from "@/components/avatar-ascii.json";
  * 它编译不过。以前这里是 terminal.tsx 里一串 else if，漏一个不会报错 ——
  * 命令能跑、返回了标记、屏幕上什么都不出现，只能等谁敲到那条命令才发现
  */
-export function renderVisual(v: Visual): ReactNode {
+export function renderVisual(v: Visual, procs: ProcTable): ReactNode {
   switch (v.render) {
     case "neofetch":
       return <Neofetch info={v.info} />;
     case "sl":
-      return <Sl />;
+      return <Sl procs={procs} />;
     case "donut":
-      return <Donut />;
+      return <Donut procs={procs} />;
     default: {
       const missing: never = v;
       return missing;
@@ -94,8 +105,9 @@ const STEP_MS = 55;
 const RUN_MS = Math.ceil((TRACK_W + TRAIN_W) / STEP_PX) * STEP_MS;
 
 /** sl：火车从右往左开过去，开完这块自己塌掉，输出流上不留空洞 */
-export function Sl() {
+export function Sl({ procs }: { procs: ProcTable }) {
   const [x, setX] = useState(TRACK_W);
+  const doneRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
   useEffect(() => {
     // 尊重系统的「减少动态效果」——静态摆一辆，别硬动
@@ -103,12 +115,22 @@ export function Sl() {
     const id = setInterval(() => setX((v) => v - STEP_PX), STEP_MS);
     // 开过去之后必须停表：下面的 return null 只是不再渲染，组件并没有卸载，
     // 不停的话它会一直 setState 下去，连敲几次 sl 就挂着几个永不停的定时器
-    const stop = setTimeout(() => clearInterval(id), RUN_MS);
+    // kill 走这个回调：车当场停在原地，和终止一个真进程一样。
+    // 定时器句柄放 ref，因为登记 stop 的时候它还没创建出来
+    const pid = procs.spawn("sl", () => {
+      clearInterval(id);
+      clearTimeout(doneRef.current);
+    });
+    doneRef.current = setTimeout(() => {
+      clearInterval(id);
+      procs.exit(pid);
+    }, RUN_MS);
     return () => {
       clearInterval(id);
-      clearTimeout(stop);
+      clearTimeout(doneRef.current);
+      procs.exit(pid);
     };
-  }, []);
+  }, [procs]);
 
   if (x <= -TRAIN_W) return null; // 开过去了
 
@@ -124,20 +146,29 @@ export function Sl() {
 }
 
 /** 甜甜圈：角度推进由这里管，每帧的形状是 donutFrame 算的。转一阵就停，别一直烧 CPU */
-export function Donut() {
+export function Donut({ procs }: { procs: ProcTable }) {
   const SPIN_MS = 12_000;
   // 不从 (0,0) 起：那个角度环面正好侧对着看，只剩一条窄带，当第一帧太空
   const [angle, setAngle] = useState({ a: 1.0, b: 0.5 });
+  const doneRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
   useEffect(() => {
     if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return;
     const id = setInterval(() => setAngle((v) => ({ a: v.a + 0.07, b: v.b + 0.03 })), 50);
-    const stop = setTimeout(() => clearInterval(id), SPIN_MS);
+    const pid = procs.spawn("donut", () => {
+      clearInterval(id);
+      clearTimeout(doneRef.current);
+    });
+    doneRef.current = setTimeout(() => {
+      clearInterval(id);
+      procs.exit(pid);
+    }, SPIN_MS);
     return () => {
       clearInterval(id);
-      clearTimeout(stop);
+      clearTimeout(doneRef.current);
+      procs.exit(pid);
     };
-  }, []);
+  }, [procs]);
 
   return (
     <pre className="sl" aria-label="一个旋转的甜甜圈 / a spinning donut">

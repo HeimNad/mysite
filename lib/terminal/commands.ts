@@ -6,6 +6,7 @@ import { LANGS, pick, type Lang, type Msg } from "../site/i18n.ts";
 import { displayWidth, padCols } from "./text.ts";
 import { aptSize, PACKAGES } from "./packages.ts";
 import { getFont, renderFiglet } from "./figlet.ts";
+import { INIT_PID, psTable, type Proc } from "./procs.ts";
 import { SITE_URL } from "../site/me.ts";
 import {
   entries,
@@ -69,6 +70,14 @@ export type Ctx = {
   install: (name: string) => Promise<{ bytes: number; ms: number }>;
   /** 只有 sudo 转交过来的时候才是 true */
   asRoot: boolean;
+  /** 这台机器上真在跑的东西 —— 动画的定时器，不是编的列表 */
+  procs: Proc[];
+  /** 真的停掉那个定时器 */
+  kill: (pid: number) => void;
+  /** 单调时钟，ELAPSED 用。浏览器和 Node 都有 performance，属于跨运行时 */
+  now: () => number;
+  /** 内核 panic：整个终端崩掉，交给 error.tsx */
+  panic: (message: string) => void;
 };
 
 /**
@@ -603,6 +612,55 @@ export const COMMANDS: Record<string, Cmd> = {
   clear: {
     desc: { zh: "清屏（等同 Ctrl+L）", en: "clear the screen (same as Ctrl+L)" },
     run: (_a, _s, ctx) => ctx.clear(),
+  },
+
+  ps: {
+    desc: { zh: "列出正在运行的进程", en: "list running processes" },
+    man: {
+      zh:
+        "这台机器上真在跑的东西：1 号是 shell 自己，其余是动画的定时器。\n" +
+        "敲 sl 或 donut 之后再看一次，它们会出现在这里 —— 然后可以 kill 掉。\n" +
+        "ELAPSED 是真实运行时长；不显示 TIME，因为 CPU 时间在浏览器里量不到。",
+      en:
+        "What is actually running here: PID 1 is the shell itself, the rest are\n" +
+        "animation timers. Run sl or donut and look again — they show up, and\n" +
+        "they can be killed.\n" +
+        "ELAPSED is real. TIME is absent because CPU time is not measurable here.",
+    },
+    run: (_a, _s, ctx) => psTable(ctx.procs, ctx.now()),
+  },
+
+  kill: {
+    desc: { zh: "终止一个进程", en: "terminate a process" },
+    usage: { zh: "kill [-9] <pid>", en: "kill [-9] <pid>" },
+    man: {
+      zh:
+        "真的把那个定时器停掉 —— 火车会当场停住，圆环会停止旋转。\n" +
+        "1 号进程杀不掉，除非 -9。那样的话后果自负。",
+      en:
+        "Really stops that timer — the train halts, the torus stops turning.\n" +
+        "PID 1 refuses to die unless you insist with -9. That goes how you would expect.",
+    },
+    run(args, _stdin, ctx) {
+      const force = args.includes("-9");
+      const target = args.find((a) => !a.startsWith("-"));
+      if (!target) throw new Error(ctx.t("kill: 用法: kill [-9] <pid>", "kill: usage: kill [-9] <pid>"));
+
+      const pid = Number(target);
+      if (!Number.isInteger(pid))
+        throw new Error(`kill: ${target}: ${ctx.t("参数必须是进程号", "arguments must be process IDs")}`);
+
+      // 真 Linux 里 init 杀不掉；硬来的话内核会 panic，那就照做
+      if (pid === INIT_PID) {
+        if (!force) throw new Error(`kill: (${pid}) - ${ctx.t("不允许的操作", "Operation not permitted")}`);
+        ctx.panic("Kernel panic - not syncing: Attempted to kill init!");
+        return;
+      }
+
+      if (!ctx.procs.some((p) => p.pid === pid))
+        throw new Error(`kill: (${pid}) - ${ctx.t("没有那个进程", "No such process")}`);
+      ctx.kill(pid);
+    },
   },
 
   apt: {

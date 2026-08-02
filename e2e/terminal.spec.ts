@@ -210,6 +210,53 @@ test("输入法组合期间的回车和方向键归输入法，不归终端", as
   await expect(log).toContainText("heimnad");
 });
 
+// ps/kill 的重点是"那个进程是真的"：列出来的是页面上真在跑的定时器，
+// kill 之后动画当场停住。这条只有真浏览器验得了
+test("ps 列的是真在跑的东西，kill 真的把它停掉", async ({ page }) => {
+  const { log } = await boot(page);
+
+  // 什么都没跑的时候只有 shell 自己
+  await run(page, "ps");
+  await expect(log).toContainText("hnsh");
+  await expect(log).not.toContainText("donut");
+
+  await run(page, "donut");
+  const donut = log.locator("pre").last();
+  await expect(donut).toContainText("$");
+
+  // 现在它出现在进程表里了
+  await run(page, "ps");
+  await expect(log).toContainText("donut");
+
+  // 取出 pid 再杀掉 —— 杀完形状必须定住
+  const psText = await log.innerText();
+  const pid = psText.match(/^\s*(\d+) pts\/0\s+\S+ donut$/m)?.[1];
+  expect(pid, `ps 里没找到 donut 的 pid:\n${psText}`).toBeTruthy();
+
+  await run(page, `kill ${pid}`);
+  const frozen = await donut.textContent();
+  await page.waitForTimeout(400);
+  expect(await donut.textContent()).toBe(frozen);
+
+  // 死了就不在表里了
+  await run(page, "ps");
+  const after = (await log.innerText()).split("PID TTY").pop()!;
+  expect(after).not.toContain("donut");
+});
+
+test("kill 1 要 -9，而 -9 会把整台机器带走", async ({ page }) => {
+  const { log } = await boot(page);
+
+  await run(page, "kill 1");
+  await expect(log).toContainText("不允许的操作");
+
+  // 真 Linux 杀掉 init 就是内核 panic，这里对应 error.tsx
+  await run(page, "kill -9 1");
+  await expect(page.getByText("Segmentation fault (core dumped)")).toBeVisible();
+  await page.getByRole("button", { name: /重启 shell/ }).click();
+  await expect(page.getByRole("textbox")).toBeVisible();
+});
+
 // apt 的全流程。装包是真下载，所以只有浏览器里跑得出来 ——
 // 单测里 install 是个桩，验不了"那个地址真的存在"
 test("sudo apt install figlet：真下载、真出现、刷新还在", async ({ page }) => {
