@@ -5,7 +5,8 @@ import {
   getNode, HOME, isDir, promptPath, resolvePath,
   type StatDir, type StatMap,
 } from "@/lib/terminal/fs";
-import { VISIBLE_COMMANDS, type Ctx, type PostMeta } from "@/lib/terminal/commands";
+import { visibleCommands, type Ctx, type PostMeta } from "@/lib/terminal/commands";
+import { PACKAGES } from "@/lib/terminal/packages";
 import { loginDate } from "@/lib/terminal/command-utils";
 import { LANG_KEY, THEME_KEY } from "@/app/preferences";
 import { linkify, renderVisual } from "@/components/terminal-visuals";
@@ -30,6 +31,8 @@ export default function Terminal({
   const [cwd, setCwd] = useState<string[]>(HOME);
   // 初值必须和服务端一致，否则 hydration 不匹配；真正的语言在 boot 里定
   const [lang, setLangState] = useState<Lang>("zh");
+  // 已装的包 → 内容。初值必须是空的，服务端渲染时什么都没装
+  const [pkgs, setPkgs] = useState<Map<string, string>>(new Map());
   const history = useRef<string[]>([]);
   const histIdx = useRef(0);
   const key = useRef(0);
@@ -51,6 +54,7 @@ export default function Terminal({
   /** 命令历史跨刷新保留，像 ~/.bash_history。留最近 200 条，别让 localStorage 无限长 */
   const HISTORY_KEY = "history";
   const LAST_LOGIN_KEY = "lastLogin";
+  const PKGS_KEY = "packages";
   const HISTORY_MAX = 200;
 
   function saveHistory() {
@@ -119,6 +123,42 @@ export default function Terminal({
     }
   }
 
+  /**
+   * 装一个包：真的去 fetch 那个文件，把内容留在内存里，并记下"装过"。
+   * 返回真实的字节数和耗时 —— apt 输出里的数字全部来自这里，没有一个是编的
+   */
+  async function installPkg(name: string): Promise<{ bytes: number; ms: number }> {
+    const pkg = PACKAGES[name];
+    if (!pkg) throw new Error(`E: Unable to locate package ${name}`);
+    const started = performance.now();
+    const res = await fetch(pkg.path);
+    if (!res.ok)
+      throw new Error(`E: Failed to fetch ${pkg.path}  ${res.status} ${res.statusText}`);
+    const body = await res.text();
+    const ms = performance.now() - started;
+
+    setPkgs((prev) => new Map(prev).set(name, body));
+    try {
+      const next = [...new Set([...installed(), name])];
+      localStorage.setItem(PKGS_KEY, JSON.stringify(next));
+    } catch {
+      // 隐私模式下记不住，这次会话仍然可用
+    }
+    // 字节数按 UTF-8 算 —— 那才是网络上真正传输的量
+    return { bytes: new TextEncoder().encode(body).length, ms };
+  }
+
+  /** 上次装过哪些包 */
+  function installed(): string[] {
+    try {
+      const raw = localStorage.getItem(PKGS_KEY);
+      const parsed: unknown = raw ? JSON.parse(raw) : null;
+      return Array.isArray(parsed) ? parsed.filter((p): p is string => typeof p === "string") : [];
+    } catch {
+      return [];
+    }
+  }
+
   /** curl 用：取本站某个路径。非 2xx 按 curl -f 的说法报错，不然会吐出一整页 404 HTML */
   async function fetchPath(path: string): Promise<string> {
     const res = await fetch(path);
@@ -145,6 +185,9 @@ export default function Terminal({
       history: history.current,
       posts,
       stats,
+      pkgs,
+      install: installPkg,
+      asRoot: false,
     };
   }
 
@@ -188,7 +231,7 @@ export default function Terminal({
 
     if (parts.length === 1 && !hasTrailingSpace) {
       const partial = parts[0].trimStart();
-      const m = VISIBLE_COMMANDS.filter((c) => c.startsWith(partial));
+      const m = visibleCommands(pkgs).filter((c) => c.startsWith(partial));
       if (m.length === 1) replacement = stage.replace(/\S*$/, m[0] + " ");
       else candidates.push(...m);
     } else {
@@ -320,6 +363,13 @@ export default function Terminal({
           ? saved
           : detectLang(navigator.languages ?? [navigator.language]);
       if (initial !== "zh") setLang(initial);
+
+      // 上次装过的包要还在 —— dpkg 的数据库不会因为你关了终端就清空。
+      // 内容不进 localStorage（30 kB 起步，配额不该花在这），重新取一次即可，
+      // 浏览器缓存会兜住，所以这一步实际上不走网络
+      for (const name of installed()) {
+        if (Object.hasOwn(PACKAGES, name)) void installPkg(name).catch(() => {});
+      }
 
       // 恢复上次的命令历史，↑ 立刻就能翻到
       try {

@@ -1,5 +1,5 @@
 // 管道执行器：把 "a | b | c" 串起来跑。纯逻辑，见 shell.test.mts
-import { ALIASES, COMMANDS, type Ctx, type Visual } from "./commands.ts";
+import { ALIASES, available, COMMANDS, type Ctx, type Visual } from "./commands.ts";
 
 export type ExecResult = {
   /** string 可进管道；Visual 只能是最后一环；undefined 表示无输出 */
@@ -25,14 +25,23 @@ export async function execute(input: string, ctx: Omit<Ctx, "piped">): Promise<E
       const [name, ...args] = tokens;
       if (!name)
         throw new Error(ctx.t("语法错误：管道旁边缺少命令", "syntax error: missing command near |"));
-      const cmd = Object.hasOwn(COMMANDS, name) ? COMMANDS[name] : undefined;
-      if (!cmd)
+      const found = Object.hasOwn(COMMANDS, name) ? COMMANDS[name] : undefined;
+      const cmd = found && available(found, ctx.pkgs) ? found : undefined;
+      if (!cmd) {
+        // 命令存在但包没装 —— 照抄 Ubuntu 的 command-not-found，
+        // 它顺带就是这套包管理的发现机制，不需要在 help 里另外打广告
+        if (found?.pkg)
+          throw new Error(
+            `Command '${name}' not found, but can be installed with:\n` +
+              `sudo apt install ${found.pkg}`
+          );
         throw new Error(
           ctx.t(
             `${name}: 未找到命令。输入 help 查看可用命令。`,
             `${name}: command not found. Type help to see what works.`
           )
         );
+      }
 
       const isLast = i === stages.length - 1;
       // 读文件的命令是 async，只看结构的是同步 —— await 对两者都成立

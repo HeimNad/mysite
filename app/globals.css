@@ -149,6 +149,14 @@ pre { font: inherit; }
   overflow-x: auto; /* 长代码行自己滚，别把页面撑横 */
   margin: 1.5rem 0;
 }
+/* 软件源的目录索引。真镜像就是一个开着 autoindex 的 web 服务器，
+   所以这里刻意朴素：无衬线标题、等宽列表、上下两条横线 */
+.autoindex h1 { font-size: 1.3rem; font-weight: 400; margin-bottom: 0.5rem; }
+.autoindex hr { margin: 0.5rem 0; }
+.autoindex pre { background: none; padding: 0.5rem 0; margin: 0; white-space: pre; }
+.autoindex a { text-decoration: none; }
+.autoindex a:hover { text-decoration: underline; }
+
 .prose table { border-collapse: collapse; width: 100%; margin: 1.5rem 0; font-size: 0.9rem; }
 .prose th, .prose td { border: 1px solid #30363d; padding: 0.5rem 0.75rem; text-align: left; }
 .prose th { background: #161b22; }

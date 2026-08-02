@@ -4,6 +4,9 @@ import { absPath, getNode, HOME, isDir, resolvePath, type StatDir, type StatMap 
 import { ME, OS_NAME, SHELL_NAME, VERSION } from "../site/me.ts";
 import { LANGS, pick, type Lang, type Msg } from "../site/i18n.ts";
 import { displayWidth, padCols } from "./text.ts";
+import { aptSize, PACKAGES } from "./packages.ts";
+import { getFont, renderFiglet } from "./figlet.ts";
+import { SITE_URL } from "../site/me.ts";
 import {
   entries,
   fsUsage,
@@ -60,6 +63,12 @@ export type Ctx = {
   stats: StatMap;
   /** 真 ls 的行为取决于输出是不是管道，我们照抄 */
   piped: boolean;
+  /** 已装的包 → 它的内容。带 pkg 的命令要装了才查得到 */
+  pkgs: Map<string, string>;
+  /** 真去下载一个包，返回真实的字节数和耗时 —— apt 的输出不编数字 */
+  install: (name: string) => Promise<{ bytes: number; ms: number }>;
+  /** 只有 sudo 转交过来的时候才是 true */
+  asRoot: boolean;
 };
 
 /**
@@ -82,6 +91,8 @@ export type Cmd = {
   man?: Msg;
   /** 彩蛋：不出现在 help 和 Tab 补全里 */
   hidden?: boolean;
+  /** 属于某个包：装了才查得到，也才出现在 help 和 Tab 补全里 */
+  pkg?: string;
   /** 返回 string 才能进管道；Visual 只能是最后一环；void 表示无输出。
    *  要读文件内容的命令返回 Promise —— 只看结构的（ls/cd/tree…）保持同步 */
   run: (
@@ -96,7 +107,7 @@ export const COMMANDS: Record<string, Cmd> = {
     desc: { zh: "显示本帮助", en: "show this help" },
     run(_args, _stdin, ctx) {
       const cmds = Object.entries(COMMANDS)
-        .filter(([, c]) => !c.hidden)
+        .filter(([, c]) => !c.hidden && available(c, ctx.pkgs))
         .sort(([a], [b]) => a.localeCompare(b));
       const w = Math.max(...cmds.map(([n]) => n.length));
       return [
@@ -594,6 +605,102 @@ export const COMMANDS: Record<string, Cmd> = {
     run: (_a, _s, ctx) => ctx.clear(),
   },
 
+  apt: {
+    desc: { zh: "包管理器", en: "package manager" },
+    usage: { zh: "apt <list|install> [包名]", en: "apt <list|install> [package]" },
+    man: {
+      zh:
+        "装东西要 root，所以是 sudo apt install <包>。\n" +
+        "装的是真文件：Get: 那一行的地址浏览器能打开，字节数是它真实的大小。\n" +
+        "装完命令才会出现在 help 和 Tab 补全里。",
+      en:
+        "Installing needs root, so it is sudo apt install <package>.\n" +
+        "The download is real: the address on the Get: line opens in a browser,\n" +
+        "and the byte count is that file's actual size.\n" +
+        "A package's commands appear in help and Tab completion only once it is installed.",
+    },
+    async run(args, _stdin, ctx) {
+      const [sub, name] = args.filter((a) => !a.startsWith("-"));
+
+      if (sub === "list") {
+        return [
+          "Listing... Done",
+          ...Object.entries(PACKAGES).map(
+            ([n, p]) =>
+              `${n}/stable ${p.version} all` +
+              (ctx.pkgs.has(n) ? " [installed]" : "") +
+              `\n  ${pick(p.desc, ctx.lang)}`
+          ),
+        ].join("\n");
+      }
+
+      if (sub !== "install")
+        throw new Error(
+          ctx.t(
+            "apt: 用法: apt <list|install> [包名]",
+            "apt: usage: apt <list|install> [package]"
+          )
+        );
+
+      if (!name) throw new Error("E: You must give at least one package name");
+      if (!Object.hasOwn(PACKAGES, name)) throw new Error(`E: Unable to locate package ${name}`);
+
+      // 真 apt 拿不到 dpkg 锁就是这两行。它同时也在教你下次加 sudo
+      if (!ctx.asRoot)
+        throw new Error(
+          "E: Could not open lock file /var/lib/dpkg/lock-frontend - open (13: Permission denied)\n" +
+            "E: Unable to acquire the dpkg frontend lock (/var/lib/dpkg/lock-frontend), are you root?"
+        );
+
+      const pkg = PACKAGES[name];
+      if (ctx.pkgs.has(name))
+        return [
+          `${name} is already the newest version (${pkg.version}).`,
+          "0 upgraded, 0 newly installed, 0 to remove and 0 not upgraded.",
+        ].join("\n");
+
+      const { bytes, ms } = await ctx.install(name);
+      // 速率是真算的：0 毫秒时按 1 毫秒算，免得除出 Infinity
+      const rate = Math.round(bytes / Math.max(ms, 1));
+      const file = pkg.path.split("/").pop();
+
+      return [
+        "Reading package lists... Done",
+        "Building dependency tree... Done",
+        "Reading state information... Done",
+        "The following NEW packages will be installed:",
+        `  ${name}`,
+        "0 upgraded, 1 newly installed, 0 to remove and 0 not upgraded.",
+        `Need to get ${aptSize(bytes)} of archives.`,
+        `After this operation, ${aptSize(pkg.installedSize)} of additional disk space will be used.`,
+        `Get:1 ${SITE_URL}${pkg.path} ${name} all ${pkg.version} [${aptSize(bytes)}]`,
+        `Fetched ${aptSize(bytes)} in ${(ms / 1000).toFixed(0)}s (${rate.toLocaleString("en-US")} kB/s)`,
+        `Selecting previously unselected package ${name}.`,
+        `Preparing to unpack .../${file} ...`,
+        `Unpacking ${name} (${pkg.version}) ...`,
+        `Setting up ${name} (${pkg.version}) ...`,
+      ].join("\n");
+    },
+  },
+
+  figlet: {
+    desc: { zh: "把文本变成大号字符画", en: "make large letters out of ordinary text" },
+    usage: { zh: "figlet <文本...>", en: "figlet <text...>" },
+    pkg: "figlet",
+    man: {
+      zh: "没给文本就读标准输入，所以 whoami | figlet 是成立的。\n字体是装包时下载的那个 .flf，渲染和真 figlet 逐字符一致。",
+      en: "With no text, reads standard input — so whoami | figlet works.\nThe font is the .flf downloaded at install time; output matches real figlet exactly.",
+    },
+    run(args, stdin, ctx) {
+      const text = args.length ? args.join(" ") : (stdin ?? "").trim();
+      if (!text)
+        throw new Error(
+          ctx.t("figlet: 给点文字（或用管道喂给它）", "figlet: give it some text (or pipe something in)")
+        );
+      return renderFiglet(text, getFont(ctx.pkgs.get("figlet")!));
+    },
+  },
+
   // ---------- 彩蛋 ----------
   donut: {
     desc: { zh: "转一个甜甜圈", en: "spin a donut" },
@@ -617,11 +724,14 @@ export const COMMANDS: Record<string, Cmd> = {
   sudo: {
     desc: { zh: "以另一个用户身份执行命令", en: "execute a command as another user" },
     hidden: true,
-    run(args, _stdin, ctx) {
+    run(args, stdin, ctx) {
       if (args.join(" ").includes("rm -rf"))
         throw new Error(
           ctx.t("nice try. 这个网站可是我一行行写的。", "nice try. I wrote this site line by line.")
         );
+      // apt 是唯一借得到 root 的命令 —— 装包本来就该要权限，其余照旧不在 sudoers 里
+      const [name, ...rest] = args;
+      if (name === "apt") return COMMANDS.apt.run(rest, stdin, { ...ctx, asRoot: true });
       throw new Error(
         ctx.t(
           `${ME.user} 不在 sudoers 文件中。此事将被报告。`,
@@ -667,8 +777,15 @@ export const COMMANDS: Record<string, Cmd> = {
   },
 };
 
-/** 补全用：非隐藏命令名 + 别名。别名也该能 Tab 补出来，否则等于没有 */
-export const VISIBLE_COMMANDS = [
-  ...Object.keys(COMMANDS).filter((n) => !COMMANDS[n].hidden),
-  ...Object.keys(ALIASES),
-].sort();
+/** 没装的包里的命令等于不存在：查不到、help 里没有、Tab 也补不出来 */
+export function available(cmd: Cmd, pkgs: Map<string, string>): boolean {
+  return !cmd.pkg || pkgs.has(cmd.pkg);
+}
+
+/** 补全用：非隐藏且已可用的命令名 + 别名。别名也该能 Tab 补出来，否则等于没有 */
+export function visibleCommands(pkgs: Map<string, string>): string[] {
+  return [
+    ...Object.keys(COMMANDS).filter((n) => !COMMANDS[n].hidden && available(COMMANDS[n], pkgs)),
+    ...Object.keys(ALIASES),
+  ].sort();
+}

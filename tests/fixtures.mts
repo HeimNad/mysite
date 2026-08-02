@@ -28,9 +28,19 @@ export function ctxOf(
   full: FSDir,
   cwd: string[] = at(),
   posts: PostMeta[] = [],
-  lang: Lang = "zh"
+  lang: Lang = "zh",
+  /** 已装的包。默认什么都没装，和新访客一致 */
+  pkgs: Map<string, string> = new Map()
 ): Omit<Ctx, "piped"> {
   return {
+    pkgs,
+    asRoot: false,
+    // 测试里不发请求，直接把内容塞进去，并报一个固定的字节数和耗时
+    install: async (name) => {
+      const body = `installed:${name}`;
+      pkgs.set(name, body);
+      return { bytes: body.length, ms: 1 };
+    },
     root: toStatTree(full),
     stats: toStatMap(full, {}, FIXED_TIME),
     cwd,

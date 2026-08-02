@@ -130,6 +130,22 @@ ll: "ls -l",
 `const missing: never = v`，认领不全时 `tsc` 直接报错。以前这里是一串 `else if`，
 漏一个不会有任何提示，命令能跑但屏幕上什么都不出现。
 
+### 加一个可以 apt install 的包
+
+有些命令要带一大坨数据（figlet 的字体 30 kB，比整个命令层还大）。这种东西不该
+进首屏，于是它们变成"包"：装了才存在。
+
+1. 把数据文件放进 `public/apt/pool/universe/<首字母>/<包名>/`
+2. 在 `lib/terminal/packages.ts` 的 `PACKAGES` 里登记 `path` `version` `desc`
+3. 给命令加 `pkg: "包名"`
+
+然后：没装的时候 `help`、Tab 补全和命令查找里都没有它，敲了会得到 Ubuntu 那句
+`Command 'x' not found, but can be installed with: sudo apt install x`；装了就全都有。
+`/apt/` 那个镜像目录页也会自己长出新路径。
+
+**这里的下载是真的。** `apt` 输出里 `Get:1` 那行的地址浏览器能打开，字节数和速率
+是那次 fetch 真实测出来的 —— 所以别在这条路径上加假的进度条或假的延迟。
+
 ### 需要新的副作用
 
 命令层是纯逻辑，不碰 `window`、`document`、`fetch` —— 这条边界由 eslint 强制。

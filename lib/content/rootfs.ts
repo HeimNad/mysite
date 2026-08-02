@@ -12,6 +12,7 @@ function bin(): FSDir {
   const out: FSDir = {};
   for (const [name, cmd] of Object.entries(COMMANDS)) {
     if (name === ":q") continue; // 不是合法文件名
+    if (cmd.pkg) continue; // 还没装的包不该有可执行文件躺在 /bin 里
     out[name] = [
       `#!${SHELL_PATH}`,
       `# ${cmd.desc.zh}`,

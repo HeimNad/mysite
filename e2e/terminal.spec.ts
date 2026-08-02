@@ -210,6 +210,53 @@ test("输入法组合期间的回车和方向键归输入法，不归终端", as
   await expect(log).toContainText("heimnad");
 });
 
+// apt 的全流程。装包是真下载，所以只有浏览器里跑得出来 ——
+// 单测里 install 是个桩，验不了"那个地址真的存在"
+test("sudo apt install figlet：真下载、真出现、刷新还在", async ({ page }) => {
+  const { log, input } = await boot(page);
+
+  // 没装之前：照抄 Ubuntu 的 command-not-found，它就是发现机制
+  await run(page, "figlet hi");
+  await expect(log).toContainText("Command 'figlet' not found");
+  await expect(log).toContainText("sudo apt install figlet");
+
+  // 不加 sudo 拿不到 dpkg 的锁
+  await run(page, "apt install figlet");
+  await expect(log).toContainText("are you root?");
+
+  await run(page, "sudo apt install figlet");
+  await expect(log).toContainText("Setting up figlet (2.2.5-3)");
+  // Get: 那一行必须是真地址，而且字节数要和文件真实大小一致（30740 → 30.7 kB）
+  await expect(log).toContainText("/apt/pool/universe/f/figlet/figlet_2.2.5-3.flf");
+  await expect(log).toContainText("30.7 kB");
+
+  await run(page, "figlet hi");
+  await expect(log).toContainText("|_|");
+
+  // 装完才进 Tab 补全
+  await input.fill("figl");
+  await input.press("Tab");
+  await expect(input).toHaveValue("figlet ");
+
+  // 刷新之后 dpkg 的记录还在，不用重装
+  await page.reload();
+  await expect(term(page).log).toContainText("欢迎来到");
+  await run(page, "figlet ok");
+  await expect(term(page).log).toContainText("|_|");
+});
+
+test("apt 输出里那个下载地址真能打开", async ({ page }) => {
+  // 站上说"下载是真的"，那这个地址就必须真的在
+  const res = await page.request.get("/apt/pool/universe/f/figlet/figlet_2.2.5-3.flf");
+  expect(res.status()).toBe(200);
+  expect((await res.body()).length).toBe(30740);
+
+  // 镜像本身也能浏览，长得像 Apache 的目录索引
+  await page.goto("/apt/pool/universe/f/figlet");
+  await expect(page.getByRole("heading")).toContainText("Index of /apt/pool/universe/f/figlet/");
+  await expect(page.getByRole("link", { name: "figlet_2.2.5-3.flf" })).toBeVisible();
+});
+
 test("草稿在生产构建里连终端也看不见", async ({ page }) => {
   const { log } = await boot(page);
   await run(page, "ls posts");

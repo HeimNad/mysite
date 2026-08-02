@@ -199,8 +199,9 @@ test("alias 命令列出全部别名", async () => {
 });
 
 test("别名能被 Tab 补全找到", async () => {
-  const { VISIBLE_COMMANDS } = await import("../lib/terminal/commands.ts");
-  for (const a of ["ll", "la", "l"]) assert.ok(VISIBLE_COMMANDS.includes(a), `${a} 不在补全列表里`);
+  const { visibleCommands } = await import("../lib/terminal/commands.ts");
+  const names = visibleCommands(new Map());
+  for (const a of ["ll", "la", "l"]) assert.ok(names.includes(a), `${a} 不在补全列表里`);
 });
 
 test("ls -l: 大小是真的，目录和文件的权限位不同", async () => {
