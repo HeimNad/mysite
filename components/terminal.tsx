@@ -573,7 +573,9 @@ export default function Terminal({
     // block:"end" —— 内容装得下时什么都不做，装不下才把底部拉到视口底部。
     // 默认的 block:"start" 会把提示符顶到屏幕上方，把已有输出推出视口
     endRef.current?.scrollIntoView({ block: "end" });
-  }, [lines]);
+    // pager 也要进依赖：less 打开时 lines 不变，不滚的话整个分页器渲染在屏幕外，
+    // 命令敲完看上去什么都没发生
+  }, [lines, pager]);
 
   // 渲染期抛才会被 error.tsx 接住 —— 命令层的异常会被 shell 的 try/catch 吃掉
   if (panic) throw new Error(panic);

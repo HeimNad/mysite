@@ -226,6 +226,10 @@ test.describe("less", () => {
     await run(page, "cat posts/why-a-terminal.md | less");
     await expect(status).toBeVisible();
     await expect(status).toContainText("(stdin)");
+    // 打开时必须自己滚过去。滚动原来只在 lines 变化时触发，而 less 不产生行 ——
+    // 分页器渲染在屏幕外，敲完命令看上去什么都没发生
+    await expect(status, "分页器要滚进视口，不能留在屏幕外").toBeInViewport();
+    await expect(page.locator(".pager pre")).toBeInViewport();
 
     const firstScreen = await page.locator(".pager pre").innerText();
     await page.keyboard.press("g"); // 先回顶，位置确定
