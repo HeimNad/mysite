@@ -346,7 +346,8 @@ export const COMMANDS: Record<string, Cmd> = {
         "  /              搜索            n / N   下一个 / 上一个\n" +
         "  q              退出\n" +
         "\n" +
-        "less 开着的时候键盘归它，q 才还给提示符 —— 和真终端一样。",
+        "less 开着的时候键盘归它，q 才还给提示符 —— 和真终端一样。\n"
+        + "搜索支持中文：/ 之后按键交回输入框，输入法照常合成。",
       en:
         "One screenful at a time, so long files stop flooding the screen.\n" +
         "With no file it reads standard input, so cat posts/x.md | less works,\n" +
@@ -358,7 +359,8 @@ export const COMMANDS: Record<string, Cmd> = {
         "  /              search          n / N   next / previous match\n" +
         "  q              quit\n" +
         "\n" +
-        "While less is open the keyboard belongs to it; q gives it back.",
+        "While less is open the keyboard belongs to it; q gives it back.\n"
+        + "Search accepts CJK: after / the keys go back to the input, so an IME composes normally.",
     },
     async run(args, stdin, ctx) {
       const text = await readInput(args, stdin, ctx, "less");

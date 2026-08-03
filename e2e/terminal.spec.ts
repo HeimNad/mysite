@@ -212,47 +212,59 @@ test("输入法组合期间的回车和方向键归输入法，不归终端", as
 
 // less 是这台机器上第一个接管键盘的程序。状态机在单测里全覆盖了，
 // 这里只验那件单测验不了的事：开着的时候提示符一个键都收不到
-test("less 开着时键盘归它，q 才还回来", async ({ page }) => {
-  const { log, input } = await boot(page);
-  const status = page.locator(".pager-status");
+test.describe("less", () => {
+  // 视口写死：行数按窗口高度算，不固定的话"翻得动"就取决于跑在多大的屏上。
+  // 内容也得确定够长 —— 第一版用 /proc/cpuinfo，结果 CI 的 runner 核少、
+  // 输出装得下一屏，空格无事可做，本地绿 CI 红
+  test.use({ viewport: { width: 900, height: 400 } });
 
-  await run(page, "man less");
-  await run(page, "cat /proc/cpuinfo | less");
-  await expect(status).toBeVisible();
-  await expect(status).toContainText("(stdin)");
+  test("less 开着时键盘归它，q 才还回来", async ({ page }) => {
+    const { log, input } = await boot(page);
+    const status = page.locator(".pager-status");
 
-  const firstScreen = await page.locator(".pager pre").innerText();
-  await page.keyboard.press("g"); // 先回顶，位置确定
-  await page.keyboard.press(" ");
-  expect(await page.locator(".pager pre").innerText()).not.toBe(firstScreen);
+    await run(page, "man less");
+    await run(page, "cat posts/why-a-terminal.md | less");
+    await expect(status).toBeVisible();
+    await expect(status).toContainText("(stdin)");
 
-  // 关键：这些键没有一个跑到提示符里去
-  await expect(input).toHaveValue("");
+    const firstScreen = await page.locator(".pager pre").innerText();
+    await page.keyboard.press("g"); // 先回顶，位置确定
+    await page.keyboard.press(" ");
+    expect(await page.locator(".pager pre").innerText()).not.toBe(firstScreen);
 
-  await page.keyboard.press("q");
-  await expect(status).toBeHidden();
+    // 关键：这些键没有一个跑到提示符里去
+    await expect(input).toHaveValue("");
 
-  // 还回来之后照常敲命令
-  await run(page, "whoami");
-  await expect(log).toContainText("heimnad");
-});
+    await page.keyboard.press("q");
+    await expect(status).toBeHidden();
 
-test("less 里搜索：/ 之后打的字进搜索框，不进提示符", async ({ page }) => {
-  const { input } = await boot(page);
-  await run(page, "cat /proc/cpuinfo | less");
-  const status = page.locator(".pager-status");
-  await expect(status).toBeVisible(); // 命令是异步的，别在分页器出现前就按键
+    // 还回来之后照常敲命令
+    await run(page, "whoami");
+    await expect(log).toContainText("heimnad");
+  });
 
-  await page.keyboard.press("/");
-  await page.keyboard.type("processor");
-  await expect(status).toHaveText("/processor");
-  await expect(input, "搜索词不该漏进提示符").toHaveValue("");
+  test("less 里能搜中文，搜完输入框不留残渣", async ({ page }) => {
+    const { log, input } = await boot(page);
+    await run(page, "cat posts/why-a-terminal.md | less");
+    const status = page.locator(".pager-status");
+    await expect(status).toBeVisible(); // 命令是异步的，别在分页器出现前就按键
 
-  await page.keyboard.press("Enter");
-  await expect(status).toContainText("(stdin)");
-  await page.keyboard.press("q");
-  await expect(status).toBeHidden();
-});
+    await page.keyboard.press("/");
+    // 中文得走输入框才合成得出来 —— 搜索时全都 preventDefault 的话这里会是空的
+    await page.keyboard.type("终端");
+    await expect(status, "状态行就是搜索框").toHaveText("/终端");
+
+    await page.keyboard.press("Enter");
+    await expect(status).toContainText("(stdin)");
+    await expect(input, "回车后搜索词要清掉，不能留成下一条命令").toHaveValue("");
+
+    await page.keyboard.press("q");
+    await expect(status).toBeHidden();
+    // 搜索词绝不能被当成命令执行
+    await expect(log).not.toContainText("终端: 未找到命令");
+  });
+
+}); // less
 
 // 这两条要真的联网，验的是别人家接口的行为 —— 桩测不了"wttr.in 到底
 // 给不给浏览器读"，而那正是这条命令能不能存在的前提。

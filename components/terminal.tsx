@@ -397,12 +397,25 @@ export default function Terminal({
     // less 开着的时候键盘归它，提示符一个键也收不到 —— 和真终端一样。
     // q 退出时把这一屏留在输出流里，翻到哪儿就留哪儿
     if (pager) {
+      // 搜索输入时把键让给输入框，只截回车和 Esc —— 全都 preventDefault 的话
+      // 中文输入法没法合成，一个中文内容为主的站却搜不了中文
+      if (pager.typing !== null) {
+        if (e.key !== "Enter" && e.key !== "Escape") return;
+        e.preventDefault();
+        setPager(pagerKey({ ...pager, typing: value }, e.key));
+        edit("");
+        return;
+      }
       e.preventDefault();
       const next = pagerKey(pager, e.key);
       if (next === null) {
+        // 退出时把这一屏留在输出流里，翻到哪儿就留哪儿
         pushLine(pagerView(pager).body.join("\n").replace(/\s+$/, ""));
         setPager(null);
-      } else setPager(next);
+      } else {
+        setPager(next);
+        if (next.typing !== null) edit(""); // 刚按下 /，清空输入框当搜索缓冲
+      }
       return;
     }
 
@@ -590,7 +603,12 @@ export default function Terminal({
         <input
           ref={inputRef}
           value={input}
-          onChange={(e) => setInput(e.target.value)}
+          onChange={(e) => {
+            setInput(e.target.value);
+            // 搜索态下输入框就是搜索缓冲，状态行跟着它走
+            if (pager && pager.typing !== null)
+              setPager({ ...pager, typing: e.target.value });
+          }}
           onKeyDown={onKeyDown}
           autoFocus
           autoComplete="off"
