@@ -82,6 +82,8 @@ export type Ctx = {
   panic: (message: string) => void;
   /** 访客自己机器的真实参数。拿不到的字段是 null，不是编的默认值 */
   machine: () => Promise<Machine>;
+  /** 把文本交给分页器。键盘从此归 less，直到用户按 q */
+  page: (text: string, name: string) => void;
 };
 
 /**
@@ -328,6 +330,41 @@ export const COMMANDS: Record<string, Cmd> = {
       en: "Prints file contents. With no file, reads standard input.",
     },
     run: (args, stdin, ctx) => readInput(args, stdin, ctx, "cat"),
+  },
+
+  less: {
+    desc: { zh: "分页查看", en: "page through text" },
+    usage: { zh: "less [文件]", en: "less [file]" },
+    man: {
+      zh:
+        "一屏一屏地看，长文不会一次糊出来。没给文件就读标准输入，\n" +
+        "所以 cat posts/xxx.md | less 和 man ls | less 都成立。\n" +
+        "\n" +
+        "  空格 / f       下一屏          b       上一屏\n" +
+        "  j / ↓          下一行          k / ↑   上一行\n" +
+        "  d / u          翻半屏          g / G   开头 / 结尾\n" +
+        "  /              搜索            n / N   下一个 / 上一个\n" +
+        "  q              退出\n" +
+        "\n" +
+        "less 开着的时候键盘归它，q 才还给提示符 —— 和真终端一样。",
+      en:
+        "One screenful at a time, so long files stop flooding the screen.\n" +
+        "With no file it reads standard input, so cat posts/x.md | less works,\n" +
+        "and so does man ls | less.\n" +
+        "\n" +
+        "  Space / f      next screen     b       previous screen\n" +
+        "  j / Down       next line       k / Up  previous line\n" +
+        "  d / u          half screen     g / G   start / end\n" +
+        "  /              search          n / N   next / previous match\n" +
+        "  q              quit\n" +
+        "\n" +
+        "While less is open the keyboard belongs to it; q gives it back.",
+    },
+    async run(args, stdin, ctx) {
+      const text = await readInput(args, stdin, ctx, "less");
+      const file = args.find((a) => !a.startsWith("-"));
+      ctx.page(text, file ?? "(stdin)");
+    },
   },
 
   tree: {

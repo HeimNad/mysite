@@ -149,6 +149,28 @@ pre { font: inherit; }
   overflow-x: auto; /* 长代码行自己滚，别把页面撑横 */
   margin: 1.5rem 0;
 }
+/* less 开着时提示符让位。不能用 hidden / display:none ——
+   那样输入框就聚焦不了，按键收不到，less 会变成一张静态图。
+   这是无障碍里"视觉隐藏但仍可聚焦"的标准写法 */
+.input-line.captured {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* less 的视口。状态行反色，和真 less 一样 */
+.pager pre { margin: 0; white-space: pre; overflow-x: auto; }
+.pager-status {
+  background: var(--fg);
+  color: var(--bg);
+  padding: 0 0.35rem;
+  display: inline-block;
+  min-width: 6rem;
+}
+
 /* 软件源的目录索引。真镜像就是一个开着 autoindex 的 web 服务器，
    所以这里刻意朴素：无衬线标题、等宽列表、上下两条横线 */
 .autoindex h1 { font-size: 1.3rem; font-weight: 400; margin-bottom: 0.5rem; }

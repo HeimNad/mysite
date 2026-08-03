@@ -12,6 +12,7 @@ import { LANG_KEY, THEME_KEY } from "@/app/preferences";
 import { linkify, renderVisual, type ProcTable } from "@/components/terminal-visuals";
 import { INIT_PID, type Proc } from "@/lib/terminal/procs";
 import { PROC_FILES, PROC_TREE, type Machine } from "@/lib/terminal/procfs";
+import { openPager, pagerKey, pagerView, type Pager } from "@/lib/terminal/pager";
 import { detectLang, type Lang } from "@/lib/site/i18n";
 import { execute } from "@/lib/terminal/shell";
 import { ME, SHELL_NAME } from "@/lib/site/me";
@@ -48,6 +49,9 @@ export default function Terminal({
   const nextPid = useRef(INIT_PID + 1);
   // 设了就在下一次渲染时抛，交给 error.tsx —— kill -9 1 的下场
   const [panic, setPanic] = useState<string | null>(null);
+  // 非 null 时 less 开着，键盘归它。这是这台机器上第一个接管键盘的程序
+  const [pager, setPager] = useState<Pager | null>(null);
+  const screenRef = useRef<HTMLDivElement>(null);
 
   // /proc 只挂在客户端：它的内容每次读都要重算，没有静态端点可给
   const root = useMemo(() => ({ ...rootProp, proc: PROC_TREE }), [rootProp]);
@@ -161,6 +165,18 @@ export default function Terminal({
     }
     // 字节数按 UTF-8 算 —— 那才是网络上真正传输的量
     return { bytes: new TextEncoder().encode(body).length, ms };
+  }
+
+  /**
+   * 一屏放得下多少行。按真实窗口高度和真实行高算 —— 写死 24 行的话，
+   * 手机上会溢出、大屏上会浪费
+   */
+  function viewportRows(): number {
+    const el = screenRef.current;
+    const lineHeight = el ? parseFloat(getComputedStyle(el).lineHeight) : 0;
+    if (!el || !Number.isFinite(lineHeight) || lineHeight <= 0) return 20;
+    // 留两行给状态行和提示符
+    return Math.max(5, Math.floor(window.innerHeight / lineHeight) - 2);
   }
 
   /** 上次装过哪些包 */
@@ -286,6 +302,7 @@ export default function Terminal({
       now: () => performance.now(),
       panic: setPanic,
       machine,
+      page: (text, name) => setPager(openPager(text, name, viewportRows())),
     };
   }
 
@@ -376,6 +393,18 @@ export default function Terminal({
     // 输入法组合期间这些键都归输入法：回车是选词不是执行，↑↓ 是翻候选词不是翻历史。
     // 不挡的话中文用户按回车会把半截拼音当命令跑掉
     if (e.nativeEvent.isComposing) return;
+
+    // less 开着的时候键盘归它，提示符一个键也收不到 —— 和真终端一样。
+    // q 退出时把这一屏留在输出流里，翻到哪儿就留哪儿
+    if (pager) {
+      e.preventDefault();
+      const next = pagerKey(pager, e.key);
+      if (next === null) {
+        pushLine(pagerView(pager).body.join("\n").replace(/\s+$/, ""));
+        setPager(null);
+      } else setPager(next);
+      return;
+    }
 
     // ---- readline 键位：终端用户的肌肉记忆，按下去没反应会立刻出戏 ----
     if (e.ctrlKey && !e.altKey && !e.metaKey) {
@@ -545,10 +574,18 @@ export default function Terminal({
     >
       {/* role=log + aria-live：命令输出是逐条追加的，读屏软件得跟着念，
           否则敲完 help 屏幕上多了一大段而它一声不吭 */}
-      <div role="log" aria-live="polite" aria-atomic="false">
+      <div role="log" aria-live="polite" aria-atomic="false" ref={screenRef}>
         {lines}
       </div>
-      <div className="input-line">
+      {pager && (
+        <div className="pager">
+          <pre>{pagerView(pager).body.join("\n")}</pre>
+          <div className="pager-status">{pagerView(pager).status}</div>
+        </div>
+      )}
+      {/* less 开着时提示符看不见，但输入框必须留在可聚焦状态 ——
+          用 hidden 属性会让它收不到任何按键，less 就成了摆设 */}
+      <div className={"input-line" + (pager ? " captured" : "")}>
         <span className="prompt">{prompt}</span>
         <input
           ref={inputRef}

@@ -210,6 +210,50 @@ test("输入法组合期间的回车和方向键归输入法，不归终端", as
   await expect(log).toContainText("heimnad");
 });
 
+// less 是这台机器上第一个接管键盘的程序。状态机在单测里全覆盖了，
+// 这里只验那件单测验不了的事：开着的时候提示符一个键都收不到
+test("less 开着时键盘归它，q 才还回来", async ({ page }) => {
+  const { log, input } = await boot(page);
+  const status = page.locator(".pager-status");
+
+  await run(page, "man less");
+  await run(page, "cat /proc/cpuinfo | less");
+  await expect(status).toBeVisible();
+  await expect(status).toContainText("(stdin)");
+
+  const firstScreen = await page.locator(".pager pre").innerText();
+  await page.keyboard.press("g"); // 先回顶，位置确定
+  await page.keyboard.press(" ");
+  expect(await page.locator(".pager pre").innerText()).not.toBe(firstScreen);
+
+  // 关键：这些键没有一个跑到提示符里去
+  await expect(input).toHaveValue("");
+
+  await page.keyboard.press("q");
+  await expect(status).toBeHidden();
+
+  // 还回来之后照常敲命令
+  await run(page, "whoami");
+  await expect(log).toContainText("heimnad");
+});
+
+test("less 里搜索：/ 之后打的字进搜索框，不进提示符", async ({ page }) => {
+  const { input } = await boot(page);
+  await run(page, "cat /proc/cpuinfo | less");
+  const status = page.locator(".pager-status");
+  await expect(status).toBeVisible(); // 命令是异步的，别在分页器出现前就按键
+
+  await page.keyboard.press("/");
+  await page.keyboard.type("processor");
+  await expect(status).toHaveText("/processor");
+  await expect(input, "搜索词不该漏进提示符").toHaveValue("");
+
+  await page.keyboard.press("Enter");
+  await expect(status).toContainText("(stdin)");
+  await page.keyboard.press("q");
+  await expect(status).toBeHidden();
+});
+
 // 这两条要真的联网，验的是别人家接口的行为 —— 桩测不了"wttr.in 到底
 // 给不给浏览器读"，而那正是这条命令能不能存在的前提。
 //
