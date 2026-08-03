@@ -137,8 +137,8 @@ export const COMMANDS: Record<string, Cmd> = {
           "Pipes: cat skills.txt | grep Language | wc -l"
         ),
         ctx.t(
-          "Tab 补全，↑↓ 翻历史，Ctrl+L 清屏。文件系统里藏了点东西。",
-          "Tab completes, ↑↓ walks history, Ctrl+L clears. The filesystem hides a few things."
+          "Tab 补全，↑↓ 翻历史，Ctrl+R 搜历史，!! 重跑上一条，Ctrl+L 清屏。文件系统里藏了点东西。",
+          "Tab completes, ↑↓ walks history, Ctrl+R searches it, !! reruns the last one, Ctrl+L clears. The filesystem hides a few things."
         ),
       ].join("\n");
     },
@@ -694,6 +694,24 @@ export const COMMANDS: Record<string, Cmd> = {
 
   history: {
     desc: { zh: "显示命令历史", en: "show command history" },
+    man: {
+      zh:
+        "编号是给 !n 用的。\n" +
+        "  !!        重跑上一条\n" +
+        "  !3        重跑第 3 条\n" +
+        "  !-2       重跑倒数第 2 条\n" +
+        "  !cat      重跑最近一条以 cat 开头的\n" +
+        "  Ctrl+R    往回搜历史，再按一次找更早的，Esc 放弃\n" +
+        "展开后的命令会照实回显出来 —— 跑的是哪条得看得见。",
+      en:
+        "The numbers are what !n refers to.\n" +
+        "  !!        rerun the last command\n" +
+        "  !3        rerun number 3\n" +
+        "  !-2       rerun the second from last\n" +
+        "  !cat      rerun the most recent one starting with cat\n" +
+        "  Ctrl+R    search backwards; press again for an older match, Esc cancels\n" +
+        "An expanded command is echoed as expanded — you should see what actually ran.",
+    },
     run: (_a, _s, ctx) => ctx.history.map((h, i) => `  ${i + 1}  ${h}`).join("\n"),
   },
 

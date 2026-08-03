@@ -146,6 +146,18 @@ ll: "ls -l",
 **这里的下载是真的。** `apt` 输出里 `Get:1` 那行的地址浏览器能打开，字节数和速率
 是那次 fetch 真实测出来的 —— 所以别在这条路径上加假的进度条或假的延迟。
 
+### shell 层的东西（历史展开、Ctrl+R）
+
+`!!`／`!n`／`!前缀` 和 `Ctrl+R` **不是命令** —— 它们发生在命令查找之前，
+所以不在 `COMMANDS` 表里、也没有自己的 man 页（用法写在 `man history` 里）。
+纯逻辑在 `lib/terminal/history.ts`，接线在 `terminal.tsx` 的 `run()` 和 `onKeyDown`。
+
+两条和 bash 对齐的行为，别改掉：**回显的是展开后的命令**（跑的是哪条得看得见），
+**展开失败的不进历史**。
+
+`Ctrl+R` 的搜索词同样由输入框持有，理由和 `less` 的 `/` 一样 —— 全部
+`preventDefault` 的话输入法没法合成。
+
 ### 构建期抓外部数据（github 这一类）
 
 `content/github.txt` 是 `npm run github` 从 GitHub API 抓下来生成的，**和

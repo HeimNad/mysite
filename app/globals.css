@@ -149,6 +149,9 @@ pre { font: inherit; }
   overflow-x: auto; /* 长代码行自己滚，别把页面撑横 */
   margin: 1.5rem 0;
 }
+/* Ctrl+R 搜索时提示符右边显示命中的那条命令 */
+.rsearch { color: var(--dim); white-space: pre; }
+
 /* less 开着时提示符让位。不能用 hidden / display:none ——
    那样输入框就聚焦不了，按键收不到，less 会变成一张静态图。
    这是无障碍里"视觉隐藏但仍可聚焦"的标准写法 */

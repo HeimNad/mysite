@@ -210,6 +210,60 @@ test("输入法组合期间的回车和方向键归输入法，不归终端", as
   await expect(log).toContainText("heimnad");
 });
 
+test("!! 重跑上一条，回显的是展开后的命令", async ({ page }) => {
+  const { log } = await boot(page);
+  await run(page, "whoami");
+  await run(page, "!!");
+  // 回显必须是 whoami 而不是 !!，因为真正跑的是它
+  await expect(log.locator(".line").nth(-2)).toContainText("whoami");
+  await expect(log.locator(".line").last()).toHaveText("heimnad");
+
+  // 展开不了的要报错，而且不能进历史
+  await run(page, "!nosuch");
+  await expect(log).toContainText("event not found");
+  await term(page).input.press("ArrowUp");
+  await expect(term(page).input, "失败的展开不该留在历史里").toHaveValue("whoami");
+});
+
+test("Ctrl+R 反向搜索：边打边找，回车执行命中的那条", async ({ page }) => {
+  const { log, input } = await boot(page);
+  await run(page, "cat about.txt");
+  await run(page, "pwd");
+  await run(page, "cat skills.txt");
+
+  await input.press("Control+r");
+  await expect(page.locator(".prompt").last()).toContainText("(reverse-i-search)");
+
+  await page.keyboard.type("cat");
+  const shown = page.locator(".rsearch");
+  await expect(shown, "先命中最近那条 cat").toContainText("cat skills.txt");
+
+  // 再按一次往更早找
+  await input.press("Control+r");
+  await expect(shown).toContainText("cat about.txt");
+
+  await input.press("Enter");
+  // 断言要能区分跑的是哪一条 —— "Language" 两个文件里都有，等于没测。
+  // 这句只在 about.txt 里
+  await expect(log.locator(".line").last()).toContainText("你好，我是");
+  await expect(input, "执行完搜索词要清掉").toHaveValue("");
+  await expect(page.locator(".rsearch")).toHaveCount(0);
+});
+
+test("Ctrl+R 按 Esc 放弃，命令行还原成空", async ({ page }) => {
+  const { input } = await boot(page);
+  await run(page, "whoami");
+
+  await input.press("Control+r");
+  await page.keyboard.type("who");
+  await expect(page.locator(".rsearch")).toContainText("whoami");
+
+  await input.press("Escape");
+  await expect(page.locator(".rsearch")).toHaveCount(0);
+  await expect(input).toHaveValue("");
+  await expect(page.locator(".prompt").last()).toContainText("heimnad@web");
+});
+
 test("github.txt 是构建期抓的真数据，并说明了它有多旧", async ({ page }) => {
   const { log } = await boot(page);
   await run(page, "cat github.txt");

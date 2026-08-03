@@ -13,6 +13,7 @@ import { linkify, renderVisual, type ProcTable } from "@/components/terminal-vis
 import { INIT_PID, type Proc } from "@/lib/terminal/procs";
 import { PROC_FILES, PROC_TREE, type Machine } from "@/lib/terminal/procfs";
 import { openPager, pagerKey, pagerView, type Pager } from "@/lib/terminal/pager";
+import { expandHistory, searchBack } from "@/lib/terminal/history";
 import { detectLang, type Lang } from "@/lib/site/i18n";
 import { execute } from "@/lib/terminal/shell";
 import { ME, SHELL_NAME } from "@/lib/site/me";
@@ -51,6 +52,8 @@ export default function Terminal({
   const [panic, setPanic] = useState<string | null>(null);
   // 非 null 时 less 开着，键盘归它。这是这台机器上第一个接管键盘的程序
   const [pager, setPager] = useState<Pager | null>(null);
+  // Ctrl+R 的反向搜索。query 由输入框持有（输入法才合成得了），idx 是命中的那条
+  const [rsearch, setRsearch] = useState<{ query: string; idx: number } | null>(null);
   const screenRef = useRef<HTMLDivElement>(null);
 
   // /proc 只挂在客户端：它的内容每次读都要重算，没有静态端点可给
@@ -307,7 +310,21 @@ export default function Terminal({
   }
 
   async function run(raw: string) {
-    const cmdInput = raw.trim();
+    const typed = raw.trim();
+    // !! / !n / !前缀 在执行之前展开。和 bash 一样：回显和存进历史的都是
+    // 展开后的那条，因为那才是真正跑了的东西
+    const ex = typed ? expandHistory(typed, history.current) : { command: "", expanded: false };
+    if ("error" in ex) {
+      push(
+        <div className="line">
+          <span className="prompt">{prompt}</span>
+          {typed}
+        </div>
+      );
+      pushLine(`${SHELL_NAME}: ${ex.error}`, "err");
+      return; // 展开失败的不进历史，和 bash 一致
+    }
+    const cmdInput = ex.command;
     push(
       <div className="line">
         <span className="prompt">{prompt}</span>
@@ -457,7 +474,50 @@ export default function Terminal({
         case "l":
           e.preventDefault();
           return setLines([]);
+        case "r": {
+          // 反向搜索。再按一次就往更早找一条 —— 和 bash 一样
+          e.preventDefault();
+          const q = rsearch?.query ?? "";
+          const from = rsearch ? rsearch.idx : history.current.length;
+          const hit = searchBack(history.current, q, from);
+          setRsearch({ query: q, idx: hit >= 0 ? hit : from });
+          if (!rsearch) edit("");
+          return;
+        }
+        case "g":
+          // bash 用 Ctrl+G 放弃搜索，把行还原
+          if (rsearch) {
+            e.preventDefault();
+            setRsearch(null);
+            return edit("");
+          }
+          return;
       }
+    }
+
+    // 搜索态：回车执行命中的那条，Esc 放弃，其余键继续改搜索词（onChange 里重搜）
+    if (rsearch) {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        const hit = history.current[rsearch.idx] ?? "";
+        setRsearch(null);
+        edit("");
+        if (hit) void run(hit);
+        return;
+      }
+      if (e.key === "Escape") {
+        e.preventDefault();
+        setRsearch(null);
+        return edit("");
+      }
+      // 方向键等于"接受这条并继续编辑"，和 bash 一样
+      if (e.key.startsWith("Arrow")) {
+        e.preventDefault();
+        const hit = history.current[rsearch.idx] ?? "";
+        setRsearch(null);
+        return edit(hit);
+      }
+      return; // 其余交给输入框，输入法照常合成
     }
 
     if (e.key === "Enter") {
@@ -601,7 +661,10 @@ export default function Terminal({
       {/* less 开着时提示符看不见，但输入框必须留在可聚焦状态 ——
           用 hidden 属性会让它收不到任何按键，less 就成了摆设 */}
       <div className={"input-line" + (pager ? " captured" : "")}>
-        <span className="prompt">{prompt}</span>
+        {/* 搜索态下提示符换成 bash 那句，输入框就嵌在反引号中间 */}
+        <span className="prompt">
+          {rsearch ? "(reverse-i-search)`" : prompt}
+        </span>
         <input
           ref={inputRef}
           value={input}
@@ -610,6 +673,12 @@ export default function Terminal({
             // 搜索态下输入框就是搜索缓冲，状态行跟着它走
             if (pager && pager.typing !== null)
               setPager({ ...pager, typing: e.target.value });
+            // Ctrl+R 同理：输入框持有搜索词，每敲一个字重新往前找
+            if (rsearch) {
+              const q = e.target.value;
+              const hit = searchBack(history.current, q, history.current.length);
+              setRsearch({ query: q, idx: hit >= 0 ? hit : -1 });
+            }
           }}
           onKeyDown={onKeyDown}
           autoFocus
@@ -618,7 +687,14 @@ export default function Terminal({
           autoCorrect="off"
           spellCheck={false}
           aria-label={lang === "zh" ? "终端输入" : "Terminal input"}
+          style={rsearch ? { flex: "0 1 auto", width: `${Math.max(1, input.length)}ch` } : undefined}
         />
+        {rsearch && (
+          <span className="rsearch">
+            {"': "}
+            {rsearch.idx >= 0 ? history.current[rsearch.idx] : ""}
+          </span>
+        )}
       </div>
       <div ref={endRef} />
     </div>
