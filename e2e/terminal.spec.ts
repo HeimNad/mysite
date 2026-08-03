@@ -210,6 +210,17 @@ test("输入法组合期间的回车和方向键归输入法，不归终端", as
   await expect(log).toContainText("heimnad");
 });
 
+test("github.txt 是构建期抓的真数据，并说明了它有多旧", async ({ page }) => {
+  const { log } = await boot(page);
+  await run(page, "cat github.txt");
+  await expect(log).toContainText("public repos");
+  // 数据停在构建那一刻，这件事必须写在页面上而不是只写在文档里
+  await expect(log).toContainText("重新构建才会更新");
+  // 走的是普通内容管线，所以 ls 和管道都白拿
+  await run(page, "cat github.txt | grep followers | wc -l");
+  await expect(log.locator(".line").last()).toHaveText("1");
+});
+
 // less 是这台机器上第一个接管键盘的程序。状态机在单测里全覆盖了，
 // 这里只验那件单测验不了的事：开着的时候提示符一个键都收不到
 test.describe("less", () => {
