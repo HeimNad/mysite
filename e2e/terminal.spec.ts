@@ -210,6 +210,74 @@ test("输入法组合期间的回车和方向键归输入法，不归终端", as
   await expect(log).toContainText("heimnad");
 });
 
+// /proc 读的是访客自己的浏览器。核数在哪儿都拿得到，内存只有 Chromium 系报 ——
+// 所以这条要在两个引擎上分别验，不然"诚实降级"只是句口号
+test("/proc 报的是这台浏览器的真实参数", async ({ page }) => {
+  const { log } = await boot(page);
+  // 断言最后一行而不是整个日志：toContainText 会折叠空白，^ 和 $ 匹配不到行首行尾
+  const lastLine = log.locator(".line").last();
+
+  await run(page, "ls /proc");
+  await expect(log).toContainText("cpuinfo");
+
+  // 核数：grep processor | wc -l 是真 Linux 的老把戏，这里也该成立
+  await run(page, "grep processor /proc/cpuinfo | wc -l");
+  const cores = await page.evaluate(() => navigator.hardwareConcurrency);
+  await expect(lastLine).toHaveText(String(cores));
+
+  // uptime 第一个数真的在走，第二个浏览器不可能知道
+  await run(page, "cat /proc/uptime");
+  await expect(lastLine).toHaveText(/^\d+\.\d\d null$/);
+
+  // df 的配额来自 storage.estimate，不是写死的
+  await run(page, "df");
+  const quota = await page.evaluate(async () => (await navigator.storage.estimate()).quota ?? 0);
+  await expect(lastLine).toContainText(quota > 1024 ** 3 ? /\d(\.\d)?G/ : /\d(\.\d)?M/);
+});
+
+test("Safari 拿不到内存时写 null，不编数字", async () => {
+  // 专门起 WebKit：Chromium 上这几个字段都有，测不到降级那条路
+  const { webkit } = await import("@playwright/test");
+  const browser = await webkit.launch();
+  const page = await browser.newPage({ locale: "zh-CN" });
+  try {
+    await page.goto("http://localhost:3000/");
+    const log = page.getByRole("log");
+    await expect(log).toContainText("欢迎来到");
+
+    // 先确认这个引擎确实不报这两个 —— 否则下面的断言等于没测
+    const reports = await page.evaluate(() => ({
+      deviceMemory: (navigator as { deviceMemory?: number }).deviceMemory ?? null,
+      perfMemory: (performance as { memory?: object }).memory ? true : null,
+    }));
+    expect(reports.deviceMemory, "WebKit 不该报 deviceMemory").toBeNull();
+    expect(reports.perfMemory, "WebKit 不该报 performance.memory").toBeNull();
+
+    const input = page.getByRole("textbox");
+    const lastLine = log.locator(".line").last();
+    const go = async (cmd: string) => {
+      await input.fill(cmd);
+      await input.press("Enter");
+    };
+
+    await go("free");
+    await expect(lastLine).toContainText(/Mem:\s+null\s+null\s+null/);
+
+    await go("cat /proc/meminfo");
+    await expect(lastLine).toContainText(/MemTotal:\s+null/);
+    // 关键：不能出现 0 kB 这种"看着像真的"的兜底值
+    await expect(lastLine).not.toContainText("0 kB");
+
+    // 但核数这一样 WebKit 是给的，必须是真数字而不是 null
+    await go("grep processor /proc/cpuinfo | wc -l");
+    const cores = await page.evaluate(() => navigator.hardwareConcurrency);
+    expect(cores, "WebKit 该报核数").toBeGreaterThan(0);
+    await expect(lastLine).toHaveText(String(cores));
+  } finally {
+    await browser.close();
+  }
+});
+
 // ps/kill 的重点是"那个进程是真的"：列出来的是页面上真在跑的定时器，
 // kill 之后动画当场停住。这条只有真浏览器验得了
 test("ps 列的是真在跑的东西，kill 真的把它停掉", async ({ page }) => {

@@ -11,12 +11,13 @@ import { loginDate } from "@/lib/terminal/command-utils";
 import { LANG_KEY, THEME_KEY } from "@/app/preferences";
 import { linkify, renderVisual, type ProcTable } from "@/components/terminal-visuals";
 import { INIT_PID, type Proc } from "@/lib/terminal/procs";
+import { PROC_FILES, PROC_TREE, type Machine } from "@/lib/terminal/procfs";
 import { detectLang, type Lang } from "@/lib/site/i18n";
 import { execute } from "@/lib/terminal/shell";
 import { ME, SHELL_NAME } from "@/lib/site/me";
 
 export default function Terminal({
-  root,
+  root: rootProp,
   posts,
   stats,
   mode = "login",
@@ -47,6 +48,9 @@ export default function Terminal({
   const nextPid = useRef(INIT_PID + 1);
   // 设了就在下一次渲染时抛，交给 error.tsx —— kill -9 1 的下场
   const [panic, setPanic] = useState<string | null>(null);
+
+  // /proc 只挂在客户端：它的内容每次读都要重算，没有静态端点可给
+  const root = useMemo(() => ({ ...rootProp, proc: PROC_TREE }), [rootProp]);
 
   const prompt = `${ME.user}@${ME.host}:${promptPath(cwd)}$ `;
 
@@ -100,6 +104,11 @@ export default function Terminal({
   /** 按需取文件内容，命令层通过 ctx.read 调用 */
   async function readFile(segs: string[]): Promise<string> {
     const key = segs.join("/");
+    // /proc 是活的：每次读都按当下的机器状态重算，不缓存也不走网络
+    if (segs[0] === "proc") {
+      const make = PROC_FILES[segs.slice(1).join("/")];
+      if (make) return make(await machine());
+    }
     const hit = fileCache.current.get(key);
     if (hit !== undefined) return hit;
     const res = await fetch("/api/fs/" + segs.map(encodeURIComponent).join("/"));
@@ -180,6 +189,36 @@ export default function Terminal({
     []
   );
 
+  /**
+   * 访客机器的真实参数。拿不到的一律 null —— Safari 不报 deviceMemory
+   * 和 performance.memory，那就是 null，不填一个看着合理的数字
+   */
+  async function machine(): Promise<Machine> {
+    const perf = performance as Performance & {
+      memory?: { usedJSHeapSize: number; jsHeapSizeLimit: number };
+    };
+    const nav = navigator as Navigator & { deviceMemory?: number };
+    let quota: number | null = null;
+    let usage: number | null = null;
+    try {
+      const est = await navigator.storage?.estimate?.();
+      quota = est?.quota ?? null;
+      usage = est?.usage ?? null;
+    } catch {
+      // 权限或隐私模式下会抛，那就是拿不到
+    }
+    return {
+      cores: nav.hardwareConcurrency ?? null,
+      memoryGB: nav.deviceMemory ?? null,
+      heapUsed: perf.memory?.usedJSHeapSize ?? null,
+      heapLimit: perf.memory?.jsHeapSizeLimit ?? null,
+      storageQuota: quota,
+      storageUsage: usage,
+      uptimeMs: performance.now(),
+      platform: navigator.userAgent.match(/\(([^;)]+)/)?.[1] ?? null,
+    };
+  }
+
   /** curl 用：取本站某个路径。非 2xx 按 curl -f 的说法报错，不然会吐出一整页 404 HTML */
   async function fetchPath(path: string): Promise<string> {
     const res = await fetch(path);
@@ -223,6 +262,7 @@ export default function Terminal({
       },
       now: () => performance.now(),
       panic: setPanic,
+      machine,
     };
   }
 

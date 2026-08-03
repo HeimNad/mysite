@@ -7,6 +7,7 @@ import { displayWidth, padCols } from "./text.ts";
 import { aptSize, PACKAGES } from "./packages.ts";
 import { getFont, renderFiglet } from "./figlet.ts";
 import { INIT_PID, psTable, type Proc } from "./procs.ts";
+import { dfTable, freeTable, unameLine, type Machine } from "./procfs.ts";
 import { SITE_URL } from "../site/me.ts";
 import {
   entries,
@@ -78,6 +79,8 @@ export type Ctx = {
   now: () => number;
   /** 内核 panic：整个终端崩掉，交给 error.tsx */
   panic: (message: string) => void;
+  /** 访客自己机器的真实参数。拿不到的字段是 null，不是编的默认值 */
+  machine: () => Promise<Machine>;
 };
 
 /**
@@ -612,6 +615,49 @@ export const COMMANDS: Record<string, Cmd> = {
   clear: {
     desc: { zh: "清屏（等同 Ctrl+L）", en: "clear the screen (same as Ctrl+L)" },
     run: (_a, _s, ctx) => ctx.clear(),
+  },
+
+  uname: {
+    desc: { zh: "显示系统信息", en: "print system information" },
+    usage: { zh: "uname [-a]", en: "uname [-a]" },
+    man: {
+      zh: "版本号是这份代码的 commit hash，不是编的。",
+      en: "The version is this code's commit hash, not a made-up number.",
+    },
+    async run(args, _stdin, ctx) {
+      return unameLine(await ctx.machine(), args.includes("-a"));
+    },
+  },
+
+  free: {
+    desc: { zh: "显示内存用量", en: "show memory usage" },
+    man: {
+      zh:
+        "Mem 来自 navigator.deviceMemory，Heap 来自 performance.memory。\n" +
+        "这两个只有 Chromium 系的浏览器肯说，Safari 上会是 null ——\n" +
+        "写 null 而不是填一个看着合理的数字，因为后者是编的。",
+      en:
+        "Mem comes from navigator.deviceMemory, Heap from performance.memory.\n" +
+        "Only Chromium-based browsers report either, so Safari shows null.\n" +
+        "Null rather than a plausible-looking number, because that would be invented.",
+    },
+    run: async (_a, _s, ctx) => freeTable(await ctx.machine()),
+  },
+
+  df: {
+    desc: { zh: "显示磁盘用量", en: "report filesystem disk space usage" },
+    usage: { zh: "df [-h]", en: "df [-h]" },
+    man: {
+      zh:
+        "这台机器只有一块盘：浏览器分给本站的存储配额。\n" +
+        "命令历史、语言、主题和装过的包都在上面，所以 Used 会随你的使用变。\n" +
+        "配额各家不同 —— 实测 Chrome 3 G、Safari 1 G。",
+      en:
+        "This machine has one disk: the storage quota the browser grants this site.\n" +
+        "Command history, language, theme and installed packages live on it, so Used moves.\n" +
+        "The quota differs by browser — measured 3 G on Chrome, 1 G on Safari.",
+    },
+    run: async (_a, _s, ctx) => dfTable(await ctx.machine(), absPath(HOME)),
   },
 
   ps: {
