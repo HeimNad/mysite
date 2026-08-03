@@ -14,7 +14,7 @@ import { INIT_PID, type Proc } from "@/lib/terminal/procs";
 import { PROC_FILES, PROC_TREE, type Machine } from "@/lib/terminal/procfs";
 import { openPager, pagerKey, pagerView, type Pager } from "@/lib/terminal/pager";
 import { expandHistory, searchBack } from "@/lib/terminal/history";
-import { insertText, openVim, vimKey, vimView, type Vim } from "@/lib/terminal/vim";
+import { insertText, openVim, vimKey, type Vim } from "@/lib/terminal/vim";
 import { detectLang, type Lang } from "@/lib/site/i18n";
 import { execute } from "@/lib/terminal/shell";
 import { ME, SHELL_NAME } from "@/lib/site/me";
@@ -340,22 +340,18 @@ export default function Terminal({
   function sendVim(key: string) {
     if (!vim) return;
     const next = vimKey(vim, key);
-    if (next === null) {
-      // 退出时把最后一屏留在输出流里，和 less 一致
-      pushLine(vimView(vim).body.join("\n").replace(/\s+$/, ""));
-      setVim(null);
-    } else setVim(next);
+    // 退出什么都不留：备用屏幕的语义就是"原样恢复"，真 vim 退出后
+    // 屏幕上看不到刚才编辑的内容
+    if (next === null) setVim(null);
+    else setVim(next);
     edit("");
   }
 
   function sendPager(key: string) {
     if (!pager) return;
     const next = pagerKey(pager, key);
-    if (next === null) {
-      // 退出时把这一屏留在输出流里，翻到哪儿就留哪儿
-      pushLine(pagerView(pager).body.join("\n").replace(/\s+$/, ""));
-      setPager(null);
-    } else {
+    if (next === null) setPager(null);
+    else {
       setPager(next);
       if (next.typing !== null) edit(""); // 刚按下 /，清空输入框当搜索缓冲
     }
@@ -703,7 +699,15 @@ export default function Terminal({
     >
       {/* role=log + aria-live：命令输出是逐条追加的，读屏软件得跟着念，
           否则敲完 help 屏幕上多了一大段而它一声不吭 */}
-      <div role="log" aria-live="polite" aria-atomic="false" ref={screenRef}>
+      {/* 全屏程序开着时整个滚动历史都收起来 —— 真终端切到备用屏幕缓冲区，
+          看不到之前的输出，退出后原样恢复。ref 留着量行高用 */}
+      <div
+        role="log"
+        aria-live="polite"
+        aria-atomic="false"
+        ref={screenRef}
+        hidden={!!(vim || pager)}
+      >
         {lines}
       </div>
       {vim && <VimScreen vim={vim} hint={composeHint} />}

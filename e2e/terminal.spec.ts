@@ -312,6 +312,31 @@ test.describe("vim", () => {
     }
   });
 
+  test("vim 是整屏接管：看不到历史，退出后原样恢复", async ({ page }) => {
+    const { log } = await boot(page);
+    await run(page, "neofetch");
+    await expect(log).toContainText("GitHub:");
+
+    await run(page, "vim about.txt");
+    await expect(page.locator(".vim-status")).toBeVisible();
+    // 真终端切到备用屏幕缓冲区：滚动历史整个看不见，页面也滚不动
+    await expect(log, "vim 开着时不该看得到之前的输出").toBeHidden();
+    expect(
+      await page.evaluate(() => document.body.scrollHeight <= window.innerHeight),
+      "整屏程序开着时不该有可滚动的区域"
+    ).toBe(true);
+
+    await page.keyboard.type(":q");
+    await page.keyboard.press("Enter");
+    await expect(page.locator(".vim-status")).toBeHidden();
+
+    // 退出后历史原样回来，而且 vim 那一屏什么都没留下
+    await expect(log).toBeVisible();
+    await expect(log).toContainText("GitHub:");
+    await expect(log, "备用屏幕退出后不该留下编辑器的内容").not.toContainText("~\n~");
+    expect((await log.innerText()).trim().split("\n").pop()).toContain("vim about.txt");
+  });
+
   test("vim 真能编辑，但保存不了 —— 文件系统是只读的", async ({ page }) => {
     const { log, input } = await boot(page);
     const status = page.locator(".vim-status");
