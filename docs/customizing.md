@@ -163,9 +163,14 @@ ll: "ls -l",
 ## 测试
 
 ```bash
-npm test          # 类型检查 + 单元测试
-npm run e2e       # Playwright，跑生产构建
+npm test                                   # 类型检查 + 单元测试
+npx playwright install chromium webkit     # 第一次跑 e2e 之前
+npm run e2e                                # Playwright，跑生产构建
 ```
+
+要 webkit 是因为有一条用例专门跑它：`deviceMemory` 和 `performance.memory`
+只有 Chromium 系的浏览器报，而"拿不到就写 null"这条**只有在真正拿不到的引擎上
+才验得了**。在 Chromium 上跑那条用例等于没测。
 
 命令层是纯逻辑，所以整层都能用 `node --test` 跑，不碰网络也不碰 DOM。加了命令
 就在 `tests/shell.test.mts` 加个断言：

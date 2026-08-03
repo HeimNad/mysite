@@ -23,7 +23,10 @@ jobs:
       - run: npx eslint .
       - run: npm test
 
-      - run: npx playwright install --with-deps chromium
+      # webkit 是 Safari／iOS 的引擎。有一条用例专门跑它：deviceMemory 和
+      # performance.memory 只有 Chromium 系报，"拿不到就写 null"这条只有在
+      # 真正拿不到的引擎上才验得了
+      - run: npx playwright install --with-deps chromium webkit
       - run: npm run e2e
 
       - uses: actions/upload-artifact@v5
