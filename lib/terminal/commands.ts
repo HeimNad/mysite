@@ -9,6 +9,7 @@ import { getFont, renderFiglet } from "./figlet.ts";
 import { INIT_PID, psTable, type Proc } from "./procs.ts";
 import { dfTable, freeTable, unameLine, type Machine } from "./procfs.ts";
 import { formatWeather, parseWttr } from "./weather.ts";
+import { cutLine, sortLines, trText, uniqLines } from "./textutils.ts";
 import { SITE_URL } from "../site/me.ts";
 import {
   entries,
@@ -135,8 +136,8 @@ export const COMMANDS: Record<string, Cmd> = {
         ...cmds.map(([n, c]) => `  ${n.padEnd(w)}  ${pick(c.desc, ctx.lang)}`),
         "",
         ctx.t(
-          "管道: cat skills.txt | grep Language | wc -l",
-          "Pipes: cat skills.txt | grep Language | wc -l"
+          "管道: cat skills.txt | cut -d: -f1 | sort | uniq -c",
+          "Pipes: cat skills.txt | cut -d: -f1 | sort | uniq -c"
         ),
         ctx.t(
           "Tab 补全，↑↓ 翻历史，Ctrl+R 搜历史，!! 重跑上一条，Ctrl+L 清屏。文件系统里藏了点东西。",
@@ -469,6 +470,109 @@ export const COMMANDS: Record<string, Cmd> = {
       const { n, rest } = takeNum(args, 10);
       const lines = (await readInput(rest, stdin, ctx, "tail")).split("\n");
       return n <= 0 ? "" : lines.slice(-n).join("\n"); // slice(-0) 会返回全部，得挡一下
+    },
+  },
+
+  sort: {
+    desc: { zh: "把行排序", en: "sort lines" },
+    usage: { zh: "sort [-nru] [文件...]", en: "sort [-nru] [file...]" },
+    man: {
+      zh: "-n 按数值，-r 倒序，-u 去掉重复行。没给文件就读标准输入。",
+      en: "-n compares numerically, -r reverses, -u drops duplicates.\nWith no file, reads standard input.",
+    },
+    async run(args, stdin, ctx) {
+      const flags = args.filter((a) => a.startsWith("-")).join("");
+      const text = await readInput(args, stdin, ctx, "sort");
+      return sortLines(text.split("\n"), {
+        numeric: flags.includes("n"),
+        reverse: flags.includes("r"),
+        unique: flags.includes("u"),
+      }).join("\n");
+    },
+  },
+
+  uniq: {
+    desc: { zh: "合并相邻的重复行", en: "collapse adjacent duplicate lines" },
+    usage: { zh: "uniq [-cdu] [文件...]", en: "uniq [-cdu] [file...]" },
+    man: {
+      zh:
+        "只合并**相邻**的重复行 —— 所以通常先 sort 再 uniq。\n" +
+        "-c 前面加出现次数，-d 只留重复过的，-u 只留没重复的。",
+      en:
+        "Collapses only ADJACENT duplicates, which is why it usually follows sort.\n" +
+        "-c prefixes the count, -d keeps only repeated lines, -u only unrepeated ones.",
+    },
+    async run(args, stdin, ctx) {
+      const flags = args.filter((a) => a.startsWith("-")).join("");
+      const text = await readInput(args, stdin, ctx, "uniq");
+      return uniqLines(text.split("\n"), {
+        count: flags.includes("c"),
+        onlyDup: flags.includes("d"),
+        onlyUniq: flags.includes("u"),
+      }).join("\n");
+    },
+  },
+
+  cut: {
+    desc: { zh: "按列或字段切", en: "cut out selected fields" },
+    usage: { zh: "cut -f<列表> [-d<分隔符>] | -c<列表> [文件...]", en: "cut -f<list> [-d<delim>] | -c<list> [file...]" },
+    man: {
+      zh:
+        "-f 取字段，-d 指定分隔符（默认制表符），-c 按字符位置取。\n" +
+        "列表可以写 1、1,3、1-3。不含分隔符的行整行输出，和真 cut 一样。\n" +
+        "-c 按字符数算，中文一个字算一个。",
+      en:
+        "-f selects fields, -d sets the delimiter (tab by default), -c selects character positions.\n" +
+        "A list may be 1, 1,3 or 1-3. Lines without the delimiter pass through whole, as real cut does.\n" +
+        "-c counts characters, so one CJK glyph is one position.",
+    },
+    async run(args, stdin, ctx) {
+      // -d: 和 -d : 都要认，-f1 和 -f 1 同理
+      const opt = (letter: string) => {
+        const joined = args.find((a) => a.startsWith(`-${letter}`) && a.length > 2);
+        if (joined) return joined.slice(2);
+        const i = args.indexOf(`-${letter}`);
+        return i >= 0 ? args[i + 1] : undefined;
+      };
+      const fields = opt("f");
+      const chars = opt("c");
+      if (!fields && !chars)
+        throw new Error(ctx.t("cut: 得给 -f 或 -c", "cut: you must specify a list of fields or characters"));
+
+      // 选项的值不是文件名，别让 readInput 去读它
+      const consumed = new Set([opt("d"), fields, chars].filter(Boolean) as string[]);
+      const rest = args.filter((a) => !a.startsWith("-") && !consumed.has(a));
+      const text = await readInput(rest, stdin, ctx, "cut");
+      return text
+        .split("\n")
+        .map((l) => cutLine(l, { delim: opt("d"), fields, chars }))
+        .join("\n");
+    },
+  },
+
+  tr: {
+    desc: { zh: "替换或删除字符", en: "translate or delete characters" },
+    usage: { zh: "tr [-ds] <集合1> [集合2]", en: "tr [-ds] <set1> [set2]" },
+    man: {
+      zh:
+        "把集合1 里的字符换成集合2 里对应位置的。集合支持 a-z 这种区间。\n" +
+        "-d 删掉集合1 里的字符，-s 把连续重复的压成一个。\n" +
+        "只读标准输入 —— 和真 tr 一样，它不收文件名。",
+      en:
+        "Maps characters in set1 to the matching position in set2; ranges like a-z work.\n" +
+        "-d deletes the characters in set1, -s squeezes repeats into one.\n" +
+        "Reads standard input only — real tr takes no file operands either.",
+    },
+    run(args, stdin, ctx) {
+      const flags = args.filter((a) => a.startsWith("-")).join("");
+      const sets = args.filter((a) => !a.startsWith("-"));
+      if (!sets.length) throw new Error(ctx.t("tr: 用法: tr [-ds] <集合1> [集合2]", "tr: usage: tr [-ds] <set1> [set2]"));
+      if (stdin === null)
+        throw new Error(ctx.t("tr: 只读标准输入，用管道喂给它", "tr: reads standard input only — pipe something in"));
+      return trText(stdin, sets[0], sets[1] ?? "", {
+        delete: flags.includes("d"),
+        squeeze: flags.includes("s"),
+      });
     },
   },
 

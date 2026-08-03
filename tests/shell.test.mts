@@ -75,7 +75,15 @@ test("grep -i 忽略大小写，默认区分", async () => {
 });
 
 test("grep 非法正则退化为文本匹配而不是崩溃", async () => {
-  assert.equal(await out('echo "a(b" | grep a(b'), '"a(b"');
+  // 引号现在会被剥掉，所以 echo 出来的是 a(b 本身
+  assert.equal(await out('echo "a(b" | grep a(b'), "a(b");
+});
+
+test("引号把空格和 | 括进一个参数里", async () => {
+  // 加 cut/tr 之前引号可以不做，之后不行：空格分隔符没别的写法
+  assert.equal(await out("echo 'a b' c"), "a b c", "引号内的空格不分词");
+  assert.equal(await out("echo \"x | y\""), "x | y", "引号内的 | 不是管道");
+  assert.equal(await out("echo a'b'c"), "abc", "引号可以出现在词中间");
 });
 
 test("ls 被管道时一行一个，直连时排一行", async () => {

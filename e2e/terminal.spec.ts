@@ -50,6 +50,13 @@ test("管道真的串起来了", async ({ page }) => {
   const { log } = await boot(page);
   await run(page, "cat skills.txt | grep Language | wc -l");
   await expect(log).toContainText(/\s3$/m);
+
+  // 四条一串：cut 取字段、sort 排序、uniq -c 数个数。
+  // uniq 只合并相邻的，所以中间那个 sort 不是装饰
+  await run(page, "cat skills.txt | cut -d: -f1 | sort | uniq -c");
+  const last = log.locator(".line").last();
+  await expect(last).toContainText("3 Language");
+  await expect(last).toContainText("2 Tool");
 });
 
 test("cat 走网络取内容也能出结果", async ({ page }) => {
