@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { donutFrame } from "@/lib/terminal/donut";
 import type { Visual } from "@/lib/terminal/commands";
 import { vimView, type Vim } from "@/lib/terminal/vim";
+import { htopView, type HtopInput } from "@/lib/terminal/htop";
 import avatarAscii from "@/components/avatar-ascii.json";
 
 /**
@@ -238,6 +239,38 @@ export function ModeKeys({
           {k.label}
         </button>
       ))}
+    </div>
+  );
+}
+
+/**
+ * htop 的屏幕。所有数字都由 lib/terminal/htop.ts 算好 ——
+ * 这里只负责把选中行反色，以及把功能键画成底部那一条
+ */
+export function HtopScreen(props: Omit<HtopInput, "now" | "rows"> & { rows?: number }) {
+  const { header, rows, selected, fkeys } = htopView({
+    ...props,
+    now: props.machine.uptimeMs,
+    rows: props.rows ?? 24,
+  });
+  return (
+    <div className="htop">
+      <pre>
+        {/* 每行一个 div，块级本身就换行 —— 别再加 \n，会多出一空行 */}
+        {header.map((line, i) => (
+          <div key={`h${i}`}>{line || " "}</div>
+        ))}
+        {rows.map((line, i) => (
+          <div key={i} className={i === selected ? "htop-selected" : undefined}>
+            {line}
+          </div>
+        ))}
+      </pre>
+      <div className="htop-fkeys">
+        {fkeys.map((k) => (
+          <span key={k}>{k}</span>
+        ))}
+      </div>
     </div>
   );
 }

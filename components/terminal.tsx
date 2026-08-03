@@ -9,12 +9,13 @@ import { visibleCommands, type Ctx, type PostMeta } from "@/lib/terminal/command
 import { PACKAGES } from "@/lib/terminal/packages";
 import { loginDate } from "@/lib/terminal/command-utils";
 import { LANG_KEY, THEME_KEY } from "@/app/preferences";
-import { linkify, ModeKeys, renderVisual, VimScreen, type ProcTable } from "@/components/terminal-visuals";
+import { HtopScreen, linkify, ModeKeys, renderVisual, VimScreen, type ProcTable } from "@/components/terminal-visuals";
 import { INIT_PID, type Proc } from "@/lib/terminal/procs";
 import { PROC_FILES, PROC_TREE, type Machine } from "@/lib/terminal/procfs";
 import { openPager, pagerKey, pagerView, type Pager } from "@/lib/terminal/pager";
 import { expandHistory, searchBack } from "@/lib/terminal/history";
 import { insertText, openVim, vimKey, type Vim } from "@/lib/terminal/vim";
+import { htopKey, type HtopState } from "@/lib/terminal/htop";
 import { detectLang, type Lang } from "@/lib/site/i18n";
 import { execute } from "@/lib/terminal/shell";
 import { ME, SHELL_NAME } from "@/lib/site/me";
@@ -74,6 +75,11 @@ export default function Terminal({
   const [rsearch, setRsearch] = useState<{ query: string; idx: number; match: string } | null>(null);
   // vim 开着时键盘归它。和 pager 同一类：接管键盘的程序
   const [vim, setVim] = useState<Vim | null>(null);
+  // htop 开着时的选中行。null 表示没开
+  const [htop, setHtop] = useState<HtopState | null>(null);
+  // htop 每一拍的快照。渲染期不该读 performance.now() / navigator，
+  // 所以进程、机器参数和延迟都在定时器里量好放进 state
+  const [snap, setSnap] = useState<{ procs: Proc[]; machine: Machine; lag: number | null } | null>(null);
   // 输入法合成中：这期间的中间态不该逐字插进缓冲区
   const composing = useRef(false);
   const [composeHint, setComposeHint] = useState("");
@@ -216,6 +222,25 @@ export default function Terminal({
     }
   }
 
+  /**
+   * 当前真在跑的东西。1 号是 shell 自己，起点 0 —— performance.now() 本来就从
+   * 页面加载起算，所以它的 ELAPSED 就是这一页开了多久，是真的
+   */
+  function procSnapshot(): Proc[] {
+    return [
+      { pid: INIT_PID, cmd: SHELL_NAME, startedAt: 0 },
+      ...[...procTable.current.values()].map(({ pid, cmd, startedAt }) => ({ pid, cmd, startedAt })),
+    ];
+  }
+
+  /** 真的把那个定时器停掉。ps/kill 和 htop 的 F9 走的是同一条路 */
+  function killProc(pid: number) {
+    const p = procTable.current.get(pid);
+    if (!p) return;
+    p.stop();
+    procTable.current.delete(pid);
+  }
+
   /** 动画用它登记自己。名字就是 ps 的 CMD 列 */
   const procs: ProcTable = useMemo(
     () => ({
@@ -236,10 +261,6 @@ export default function Terminal({
    * 和 performance.memory，那就是 null，不填一个看着合理的数字
    */
   async function machine(): Promise<Machine> {
-    const perf = performance as Performance & {
-      memory?: { usedJSHeapSize: number; jsHeapSizeLimit: number };
-    };
-    const nav = navigator as Navigator & { deviceMemory?: number };
     let quota: number | null = null;
     let usage: number | null = null;
     try {
@@ -249,16 +270,7 @@ export default function Terminal({
     } catch {
       // 权限或隐私模式下会抛，那就是拿不到
     }
-    return {
-      cores: nav.hardwareConcurrency ?? null,
-      memoryGB: nav.deviceMemory ?? null,
-      heapUsed: perf.memory?.usedJSHeapSize ?? null,
-      heapLimit: perf.memory?.jsHeapSizeLimit ?? null,
-      storageQuota: quota,
-      storageUsage: usage,
-      uptimeMs: performance.now(),
-      platform: navigator.userAgent.match(/\(([^;)]+)/)?.[1] ?? null,
-    };
+    return { ...machineSync(), storageQuota: quota, storageUsage: usage };
   }
 
   /**
@@ -313,23 +325,17 @@ export default function Terminal({
       pkgs,
       install: installPkg,
       asRoot: false,
-      // 1 号进程是 shell 自己。起点是 0 —— performance.now() 本来就从页面加载起算，
-      // 所以 ps 里它的 ELAPSED 就是这一页开了多久，是真的
-      procs: [
-        { pid: INIT_PID, cmd: SHELL_NAME, startedAt: 0 },
-        ...[...procTable.current.values()].map(({ pid, cmd, startedAt }) => ({ pid, cmd, startedAt })),
-      ],
-      kill: (pid) => {
-        const p = procTable.current.get(pid);
-        if (!p) return;
-        p.stop();
-        procTable.current.delete(pid);
-      },
+      procs: procSnapshot(),
+      kill: killProc,
       now: () => performance.now(),
       panic: setPanic,
       machine,
       page: (text, name) => setPager(openPager(text, name, viewportRows())),
       edit: (text, name) => setVim(openVim(text, name, viewportRows())),
+      monitor: () => {
+        setSnap(null); // 清掉上一次的，别让旧进程表闪一下
+        setHtop({ selected: 0 });
+      },
     };
   }
 
@@ -345,6 +351,14 @@ export default function Terminal({
     if (next === null) setVim(null);
     else setVim(next);
     edit("");
+  }
+
+  function sendHtop(key: string) {
+    if (!htop) return;
+    const action = htopKey(htop, key, procSnapshot());
+    if (action.kind === "quit") setHtop(null);
+    else if (action.kind === "kill") killProc(action.pid);
+    else setHtop(action.state);
   }
 
   function sendPager(key: string) {
@@ -458,6 +472,13 @@ export default function Terminal({
     // 输入法组合期间这些键都归输入法：回车是选词不是执行，↑↓ 是翻候选词不是翻历史。
     // 不挡的话中文用户按回车会把半截拼音当命令跑掉
     if (e.nativeEvent.isComposing) return;
+
+    // htop 开着时键盘归它
+    if (htop) {
+      e.preventDefault();
+      sendHtop(e.key);
+      return;
+    }
 
     // vim 开着时键盘归它。插入模式下可打印字符要放给输入框，
     // 否则输入法没法合成 —— 和 less 的搜索同一个道理
@@ -679,13 +700,57 @@ export default function Terminal({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  /** navigator / performance 的同步部分。存储配额是异步的，htop 用不到 */
+  function machineSync(): Machine {
+    const perf = performance as Performance & {
+      memory?: { usedJSHeapSize: number; jsHeapSizeLimit: number };
+    };
+    const nav = navigator as Navigator & { deviceMemory?: number };
+    return {
+      cores: nav.hardwareConcurrency ?? null,
+      memoryGB: nav.deviceMemory ?? null,
+      heapUsed: perf.memory?.usedJSHeapSize ?? null,
+      heapLimit: perf.memory?.jsHeapSizeLimit ?? null,
+      storageQuota: null,
+      storageUsage: null,
+      uptimeMs: performance.now(),
+      platform: navigator.userAgent.match(/\(([^;)]+)/)?.[1] ?? null,
+    };
+  }
+
+  /**
+   * htop 开着时每 200ms 量一次并重画。延迟的算法：排一个 200ms 的定时器，
+   * 看它实际晚到多少 —— 主线程被 donut 那类东西占住时会明显变大。
+   * 这是浏览器里唯一量得到的"忙"，比编一个每进程 CPU% 诚实
+   */
+  useEffect(() => {
+    if (!htop) return;
+    const PERIOD = 200;
+    let planned = performance.now() + PERIOD;
+    let timer: ReturnType<typeof setTimeout>;
+    const step = () => {
+      const late = Math.max(0, performance.now() - planned);
+      setSnap({
+        procs: procSnapshot(),
+        machine: machineSync(),
+        // 晚一整个周期就算满负荷
+        lag: Math.min(100, (late / PERIOD) * 100),
+      });
+      planned = performance.now() + PERIOD;
+      timer = setTimeout(step, PERIOD);
+    };
+    // 首帧也走定时器：在 effect 里同步 setState 会触发级联渲染
+    timer = setTimeout(step, 0);
+    return () => clearTimeout(timer);
+  }, [htop]);
+
   useEffect(() => {
     // block:"end" —— 内容装得下时什么都不做，装不下才把底部拉到视口底部。
     // 默认的 block:"start" 会把提示符顶到屏幕上方，把已有输出推出视口
     endRef.current?.scrollIntoView({ block: "end" });
     // pager 也要进依赖：less 打开时 lines 不变，不滚的话整个分页器渲染在屏幕外，
     // 命令敲完看上去什么都没发生
-  }, [lines, pager, vim]);
+  }, [lines, pager, vim, htop]);
 
   // 渲染期抛才会被 error.tsx 接住 —— 命令层的异常会被 shell 的 try/catch 吃掉
   if (panic) throw new Error(panic);
@@ -706,10 +771,19 @@ export default function Terminal({
         aria-live="polite"
         aria-atomic="false"
         ref={screenRef}
-        hidden={!!(vim || pager)}
+        hidden={!!(vim || pager || htop)}
       >
         {lines}
       </div>
+      {htop && snap && (
+        <HtopScreen
+          procs={snap.procs}
+          machine={snap.machine}
+          lagPercent={snap.lag}
+          state={htop}
+          user={ME.user}
+        />
+      )}
       {vim && <VimScreen vim={vim} hint={composeHint} />}
       {(vim || pager) && (
         <ModeKeys
@@ -730,7 +804,7 @@ export default function Terminal({
       )}
       {/* less 开着时提示符看不见，但输入框必须留在可聚焦状态 ——
           用 hidden 属性会让它收不到任何按键，less 就成了摆设 */}
-      <div className={"input-line" + (pager || vim ? " captured" : "")}>
+      <div className={"input-line" + (pager || vim || htop ? " captured" : "")}>
         {/* 搜索态下提示符换成 bash 那句，输入框就嵌在反引号中间 */}
         <span className="prompt">
           {rsearch ? "(reverse-i-search)`" : prompt}

@@ -284,6 +284,50 @@ test("github.txt 是构建期抓的真数据，并说明了它有多旧", async 
 
 // vim 的状态机单测全覆盖了。这里只验浏览器才验得了的：键盘归它、
 // 输入法能打中文、光标是真画出来的
+test.describe("htop", () => {
+  test.use({ viewport: { width: 900, height: 500 } });
+
+  test("htop 是活的：进程真的出现，F9 真的杀掉", async ({ page }) => {
+    const { log } = await boot(page);
+    await run(page, "donut"); // 先跑一个，进程表里才有东西可杀
+
+    await run(page, "htop");
+    const rows = page.locator(".htop pre > div");
+    await expect(page.locator(".htop")).toBeVisible();
+    // 整屏接管：滚动历史看不见
+    await expect(log).toBeHidden();
+
+    // donut 真的在表里
+    await expect(rows.filter({ hasText: "donut" })).toHaveCount(1);
+    await expect(page.locator(".htop pre")).toContainText("Tasks:");
+
+    // TIME+ 是活的：等一秒再看，数字必须变了
+    const before = await rows.filter({ hasText: "donut" }).innerText();
+    await page.waitForTimeout(1200);
+    expect(await rows.filter({ hasText: "donut" }).innerText()).not.toBe(before);
+
+    // 选中 donut 那行再 F9 —— 它必须从表里消失
+    await page.keyboard.press("ArrowDown");
+    await expect(page.locator(".htop-selected")).toContainText("donut");
+    await page.keyboard.press("F9");
+    await expect(rows.filter({ hasText: "donut" })).toHaveCount(0);
+
+    await page.keyboard.press("q");
+    await expect(page.locator(".htop")).toBeHidden();
+    await expect(log).toBeVisible();
+  });
+
+  test("量不到的列一个都不显示，不拿 0 冒充", async ({ page }) => {
+    await boot(page);
+    await run(page, "htop");
+    const screen = page.locator(".htop pre");
+    await expect(screen).toBeVisible();
+    for (const absent of ["load average", "VIRT", "RES", "SHR", "Swp"])
+      await expect(screen, `${absent} 量不到，不该出现`).not.toContainText(absent);
+    await page.keyboard.press("q");
+  });
+});
+
 test.describe("vim", () => {
   test.use({ viewport: { width: 900, height: 400 } });
 

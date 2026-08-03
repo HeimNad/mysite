@@ -185,9 +185,17 @@ ll: "ls -l",
    `Visual` 里加** —— `Visual` 是只读渲染，不收键盘。
 3. `terminal.tsx` 的 `onKeyDown` 在模式激活时先拦截，别落到提示符。
 
-现在有两个：`less`（`pager.ts`）和 `vim`（`vim.ts`）。vim 是**能改不能存** ——
+现在有三个：`less`（`pager.ts`）、`vim`（`vim.ts`）、`htop`（`htop.ts`）。vim 是**能改不能存** ——
 文件系统只读，`:w` 给 `E45`。这不是缩水：真 vim 打开只读文件就是这个行为，
 允许你改缓冲区、只在保存时拦你。
+
+**会自己刷新的程序**（`htop`）不要在渲染期读 `performance.now()` / `navigator`
+—— React 编译器会拦，而且那本来就不该在渲染里做。在定时器里量好放进 state，
+渲染只读快照。首帧也要走定时器：在 effect 里同步 `setState` 会触发级联渲染。
+
+**量不到的就别显示**。`htop` 没有每进程 CPU%、VIRT/RES、load average、swap ——
+浏览器给不了，填上去的任何数字都是编的。缺一列比编一个数诚实。CPU 那条量的是
+事件循环延迟（排一个定时器看它晚到多少），那是这里唯一量得到的"忙"。
 
 **整屏程序要真的整屏**：开着的时候滚动历史整个 `hidden`，页面滚不动，退出后
 原样恢复、什么都不留下 —— 真终端切到备用屏幕缓冲区（alternate screen）就是

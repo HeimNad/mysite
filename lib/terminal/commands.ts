@@ -87,6 +87,8 @@ export type Ctx = {
   page: (text: string, name: string) => void;
   /** 把文本交给编辑器。键盘从此归 vim，直到 :q */
   edit: (text: string, name: string) => void;
+  /** 打开 htop。键盘从此归它，直到 q */
+  monitor: () => void;
 };
 
 /**
@@ -875,6 +877,35 @@ export const COMMANDS: Record<string, Cmd> = {
         "The quota differs by browser — measured 3 G on Chrome, 1 G on Safari.",
     },
     run: async (_a, _s, ctx) => dfTable(await ctx.machine(), absPath(HOME)),
+  },
+
+  htop: {
+    desc: { zh: "交互式进程查看器", en: "interactive process viewer" },
+    man: {
+      zh:
+        "ps 的活图版，每秒刷新。列出的还是那些真在跑的定时器 ——\n" +
+        "敲 sl 或 donut 之后在这儿看得到它们出现，跑完自己消失。\n" +
+        "\n" +
+        "  ↑↓ / jk   选进程     F9 / K    杀掉选中的\n" +
+        "  q / F10   退出\n" +
+        "\n" +
+        "少了几列是故意的：每进程 CPU%、VIRT/RES、load average、swap\n" +
+        "浏览器都给不了，填上去的任何数字都是编的。\n" +
+        "CPU 那条量的是主线程的事件循环延迟 —— 那是这里唯一量得到的「忙」。",
+      en:
+        "ps as a live picture, refreshed every second. The entries are still the\n" +
+        "timers that are really running: start sl or donut and watch them appear\n" +
+        "here and leave on their own.\n" +
+        "\n" +
+        "  Up/Down, jk   select      F9 / K    kill the selected process\n" +
+        "  q / F10       quit\n" +
+        "\n" +
+        "Several columns are missing on purpose. Per-process CPU%, VIRT/RES, load\n" +
+        "average and swap are things a browser does not report, so any number there\n" +
+        "would be invented. The CPU bar measures event-loop lag on the main thread,\n" +
+        "which is the only kind of busy that is measurable here.",
+    },
+    run: (_a, _s, ctx) => ctx.monitor(),
   },
 
   ps: {

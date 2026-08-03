@@ -60,7 +60,9 @@ export function ctxOf(
   /** less 分页的内容记在这里，供断言 */
   paged: { text: string; name: string }[] = [],
   /** vim 打开的内容记在这里，供断言 */
-  edited: { text: string; name: string }[] = []
+  edited: { text: string; name: string }[] = [],
+  /** htop 打开过几次，供断言 */
+  monitored: boolean[] = []
 ): Omit<Ctx, "piped"> {
   return {
     pkgs,
@@ -78,6 +80,9 @@ export function ctxOf(
     machine: async () => machine,
     page: (text, name) => paged.push({ text, name }),
     edit: (text, name) => edited.push({ text, name }),
+    monitor: () => {
+      monitored.push(true);
+    },
     // 测试里不发请求，直接把内容塞进去，并报一个固定的字节数和耗时
     install: async (name) => {
       const body = `installed:${name}`;
