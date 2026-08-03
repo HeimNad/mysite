@@ -149,6 +149,28 @@ pre { font: inherit; }
   overflow-x: auto; /* 长代码行自己滚，别把页面撑横 */
   margin: 1.5rem 0;
 }
+/* 模式按键栏。桌面端有物理键盘，不需要它 —— 只在窄屏出现。
+   触屏软键盘没有 Esc，没有它 vim 的插入模式出不来 */
+.keybar { display: none; }
+@media (max-width: 640px) {
+  .keybar {
+    display: flex;
+    gap: 0.4rem;
+    flex-wrap: wrap;
+    margin-top: 0.5rem;
+  }
+  .keybar button {
+    font: inherit;
+    color: var(--fg);
+    background: none;
+    border: 1px solid var(--dim);
+    border-radius: 4px;
+    padding: 0.35rem 0.7rem;
+    min-width: 2.5rem;
+  }
+  .keybar button:active { background: var(--dim); color: var(--bg); }
+}
+
 /* vim 的屏幕。光标反色画出来，标的是缓冲区里的真实位置 */
 .vim pre { margin: 0; white-space: pre; overflow-x: auto; }
 .vim-cursor { background: var(--fg); color: var(--bg); }

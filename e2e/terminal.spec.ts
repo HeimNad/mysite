@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { devices, expect, test } from "@playwright/test";
 
 // 这些路径只有真浏览器验证得了。之前每一个 UI bug 都出在这一层，
 // 而 lib/ 的单测一个都覆盖不到
@@ -279,6 +279,38 @@ test("github.txt 是构建期抓的真数据，并说明了它有多旧", async 
 // 输入法能打中文、光标是真画出来的
 test.describe("vim", () => {
   test.use({ viewport: { width: 900, height: 400 } });
+
+  test("手机上出得来 —— 软键盘没有 Esc，屏幕上必须有", async ({ browser }) => {
+    // iOS 的软键盘没有 Esc 键。没有屏幕按键栏的话，进了插入模式就只能刷新页面，
+    // 和当初 disabled 把人锁在输入框外面是同一类问题
+    const ctx = await browser.newContext({ ...devices["iPhone 13"], locale: "zh-CN" });
+    const page = await ctx.newPage();
+    try {
+      await page.goto("/");
+      const input = page.getByRole("textbox");
+      await expect(page.getByRole("log")).toContainText("欢迎来到");
+      await input.fill("vim skills.txt");
+      await input.press("Enter");
+
+      const status = page.locator(".vim-status");
+      await expect(status).toBeVisible();
+      await page.keyboard.press("i");
+      await expect(status).toContainText("-- INSERT --");
+
+      // 关键：屏幕上得有一个能点的 Esc
+      const esc = page.getByRole("button", { name: "Esc" });
+      await expect(esc, "手机上必须有可点的 Esc，否则出不来").toBeVisible();
+      await esc.click();
+      await expect(status).not.toContainText("-- INSERT --");
+
+      // 点完还能继续操作，说明焦点没被按钮抢走
+      await page.keyboard.type(":q!");
+      await page.keyboard.press("Enter");
+      await expect(status).toBeHidden();
+    } finally {
+      await ctx.close();
+    }
+  });
 
   test("vim 真能编辑，但保存不了 —— 文件系统是只读的", async ({ page }) => {
     const { log, input } = await boot(page);

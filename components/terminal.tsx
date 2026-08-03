@@ -9,7 +9,7 @@ import { visibleCommands, type Ctx, type PostMeta } from "@/lib/terminal/command
 import { PACKAGES } from "@/lib/terminal/packages";
 import { loginDate } from "@/lib/terminal/command-utils";
 import { LANG_KEY, THEME_KEY } from "@/app/preferences";
-import { linkify, renderVisual, VimScreen, type ProcTable } from "@/components/terminal-visuals";
+import { linkify, ModeKeys, renderVisual, VimScreen, type ProcTable } from "@/components/terminal-visuals";
 import { INIT_PID, type Proc } from "@/lib/terminal/procs";
 import { PROC_FILES, PROC_TREE, type Machine } from "@/lib/terminal/procfs";
 import { openPager, pagerKey, pagerView, type Pager } from "@/lib/terminal/pager";
@@ -18,6 +18,23 @@ import { insertText, openVim, vimKey, vimView, type Vim } from "@/lib/terminal/v
 import { detectLang, type Lang } from "@/lib/site/i18n";
 import { execute } from "@/lib/terminal/shell";
 import { ME, SHELL_NAME } from "@/lib/site/me";
+
+/** 模式按键栏上的键。桌面端有物理键盘，这些只在窄屏出现 */
+const VIM_KEYS = [
+  { label: "Esc", key: "Escape" },
+  { label: ":", key: ":" },
+  { label: "←", key: "ArrowLeft" },
+  { label: "↓", key: "ArrowDown" },
+  { label: "↑", key: "ArrowUp" },
+  { label: "→", key: "ArrowRight" },
+];
+const PAGER_KEYS = [
+  { label: "q", key: "q" },
+  { label: "/", key: "/" },
+  { label: "空格", key: " " },
+  { label: "↓", key: "ArrowDown" },
+  { label: "↑", key: "ArrowUp" },
+];
 
 export default function Terminal({
   root: rootProp,
@@ -54,7 +71,7 @@ export default function Terminal({
   // 非 null 时 less 开着，键盘归它。这是这台机器上第一个接管键盘的程序
   const [pager, setPager] = useState<Pager | null>(null);
   // Ctrl+R 的反向搜索。query 由输入框持有（输入法才合成得了），idx 是命中的那条
-  const [rsearch, setRsearch] = useState<{ query: string; idx: number } | null>(null);
+  const [rsearch, setRsearch] = useState<{ query: string; idx: number; match: string } | null>(null);
   // vim 开着时键盘归它。和 pager 同一类：接管键盘的程序
   const [vim, setVim] = useState<Vim | null>(null);
   // 输入法合成中：这期间的中间态不该逐字插进缓冲区
@@ -316,6 +333,34 @@ export default function Terminal({
     };
   }
 
+  /**
+   * 把一个按键交给 vim。屏幕上的按键栏和物理键盘走的是同一条路 ——
+   * iOS 的软键盘没有 Esc，没有这条路手机用户会被困在插入模式里出不来
+   */
+  function sendVim(key: string) {
+    if (!vim) return;
+    const next = vimKey(vim, key);
+    if (next === null) {
+      // 退出时把最后一屏留在输出流里，和 less 一致
+      pushLine(vimView(vim).body.join("\n").replace(/\s+$/, ""));
+      setVim(null);
+    } else setVim(next);
+    edit("");
+  }
+
+  function sendPager(key: string) {
+    if (!pager) return;
+    const next = pagerKey(pager, key);
+    if (next === null) {
+      // 退出时把这一屏留在输出流里，翻到哪儿就留哪儿
+      pushLine(pagerView(pager).body.join("\n").replace(/\s+$/, ""));
+      setPager(null);
+    } else {
+      setPager(next);
+      if (next.typing !== null) edit(""); // 刚按下 /，清空输入框当搜索缓冲
+    }
+  }
+
   async function run(raw: string) {
     const typed = raw.trim();
     // !! / !n / !前缀 在执行之前展开。和 bash 一样：回显和存进历史的都是
@@ -424,13 +469,7 @@ export default function Terminal({
       const printable = e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey;
       if (vim.mode === "insert" && printable) return; // 交给输入框，onChange 里插入
       e.preventDefault();
-      const next = vimKey(vim, e.key);
-      if (next === null) {
-        // 退出时把最后一屏留在输出流里，和 less 一致
-        pushLine(vimView(vim).body.join("\n").replace(/\s+$/, ""));
-        setVim(null);
-      } else setVim(next);
-      edit("");
+      sendVim(e.key);
       return;
     }
 
@@ -447,15 +486,7 @@ export default function Terminal({
         return;
       }
       e.preventDefault();
-      const next = pagerKey(pager, e.key);
-      if (next === null) {
-        // 退出时把这一屏留在输出流里，翻到哪儿就留哪儿
-        pushLine(pagerView(pager).body.join("\n").replace(/\s+$/, ""));
-        setPager(null);
-      } else {
-        setPager(next);
-        if (next.typing !== null) edit(""); // 刚按下 /，清空输入框当搜索缓冲
-      }
+      sendPager(e.key);
       return;
     }
 
@@ -503,7 +534,8 @@ export default function Terminal({
           const q = rsearch?.query ?? "";
           const from = rsearch ? rsearch.idx : history.current.length;
           const hit = searchBack(history.current, q, from);
-          setRsearch({ query: q, idx: hit >= 0 ? hit : from });
+          const idx = hit >= 0 ? hit : from;
+          setRsearch({ query: q, idx, match: history.current[idx] ?? "" });
           if (!rsearch) edit("");
           return;
         }
@@ -522,7 +554,7 @@ export default function Terminal({
     if (rsearch) {
       if (e.key === "Enter") {
         e.preventDefault();
-        const hit = history.current[rsearch.idx] ?? "";
+        const hit = rsearch.match;
         setRsearch(null);
         edit("");
         if (hit) void run(hit);
@@ -536,9 +568,8 @@ export default function Terminal({
       // 方向键等于"接受这条并继续编辑"，和 bash 一样
       if (e.key.startsWith("Arrow")) {
         e.preventDefault();
-        const hit = history.current[rsearch.idx] ?? "";
         setRsearch(null);
-        return edit(hit);
+        return edit(rsearch.match);
       }
       return; // 其余交给输入框，输入法照常合成
     }
@@ -676,6 +707,17 @@ export default function Terminal({
         {lines}
       </div>
       {vim && <VimScreen vim={vim} hint={composeHint} />}
+      {(vim || pager) && (
+        <ModeKeys
+          keys={vim ? VIM_KEYS : PAGER_KEYS}
+          label={lang === "zh" ? "模式按键" : "mode keys"}
+          onKey={(k) => {
+            if (vim) sendVim(k);
+            else sendPager(k);
+            inputRef.current?.focus();
+          }}
+        />
+      )}
       {pager && (
         <div className="pager">
           <pre>{pagerView(pager).body.join("\n")}</pre>
@@ -710,7 +752,7 @@ export default function Terminal({
             if (rsearch) {
               const q = e.target.value;
               const hit = searchBack(history.current, q, history.current.length);
-              setRsearch({ query: q, idx: hit >= 0 ? hit : -1 });
+              setRsearch({ query: q, idx: hit, match: hit >= 0 ? history.current[hit] : "" });
             }
           }}
           onKeyDown={onKeyDown}
@@ -738,7 +780,7 @@ export default function Terminal({
         {rsearch && (
           <span className="rsearch">
             {"': "}
-            {rsearch.idx >= 0 ? history.current[rsearch.idx] : ""}
+            {rsearch.match}
           </span>
         )}
       </div>

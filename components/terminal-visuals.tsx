@@ -208,3 +208,36 @@ export function VimScreen({ vim, hint }: { vim: Vim; hint: string }) {
     </div>
   );
 }
+
+/**
+ * 模式激活时屏幕上的按键栏。触屏软键盘没有 Esc —— 没有它，vim 的插入模式
+ * 就是个出不来的死胡同，只能刷新页面。桌面端有物理键盘，CSS 里藏起来。
+ *
+ * 单独成组件而不是写在 terminal.tsx 里：那边的一堆辅助函数会被 React 编译器
+ * 拉进这个 map 的记忆化范围，报一串"不能在渲染期调用"
+ */
+export function ModeKeys({
+  keys,
+  onKey,
+  label,
+}: {
+  keys: readonly { label: string; key: string }[];
+  onKey: (key: string) => void;
+  label: string;
+}) {
+  return (
+    <div className="keybar" aria-label={label}>
+      {keys.map((k) => (
+        <button
+          key={k.key}
+          type="button"
+          // 按下时别让输入框失焦，否则软键盘会收起来
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={() => onKey(k.key)}
+        >
+          {k.label}
+        </button>
+      ))}
+    </div>
+  );
+}
