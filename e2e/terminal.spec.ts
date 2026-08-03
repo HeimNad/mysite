@@ -210,6 +210,45 @@ test("输入法组合期间的回车和方向键归输入法，不归终端", as
   await expect(log).toContainText("heimnad");
 });
 
+// 这两条要真的联网，验的是别人家接口的行为 —— 桩测不了"wttr.in 到底
+// 给不给浏览器读"，而那正是这条命令能不能存在的前提。
+//
+// CI 里跳过：wttr.in 是免费社区服务，每次 push 都打它会被限流；而且别人
+// 宕机让 CI 变红，只会教人忽略红灯。解析和排版有 tests/weather.test.mts 覆盖，
+// 那份夹具就是从真实响应删减来的
+test.describe("联网（本地跑，CI 跳过）", () => {
+  test.skip(!!process.env.CI, "依赖外部服务，不该让别人的宕机决定这次提交能不能过");
+
+  test("wttr 真的从 wttr.in 取到天气", async ({ page }) => {
+    const { log } = await boot(page);
+    const lastLine = log.locator(".line").last();
+
+    await run(page, "wttr Beijing");
+    // 出现温度和出处才算成功；网络抖动会让它变红，那也是真实信息
+    await expect(lastLine).toContainText(/-?\d+ °C/, { timeout: 20_000 });
+    await expect(lastLine).toContainText("wttr.in");
+    await expect(lastLine).toContainText("Beijing");
+    // 给了城市就不能说是按 IP 定位的 —— wttr 的 request.type 永远是 LatLon，
+    // 拿它判断会把"查北京"说成"定位到了你"
+    await expect(lastLine).not.toContainText("按你的 IP 定位");
+  });
+
+  test("curl 对站外说真话：能读的读得到，读不到的不假装是 DNS", async ({ page }) => {
+    const { log } = await boot(page);
+    const lastLine = log.locator(".line").last();
+
+    // wttr.in 发了 Access-Control-Allow-Origin，所以真的读得到
+    await run(page, "curl https://wttr.in/tokyo?format=j1");
+    await expect(lastLine).toContainText("current_condition", { timeout: 20_000 });
+
+    // 没发 CORS 头的站点读不到 —— 但报的是"没能连上"，不是编的 DNS 失败
+    await run(page, "curl https://example.com");
+    await expect(lastLine).toContainText("Failed to connect to example.com", { timeout: 20_000 });
+    await expect(lastLine).not.toContainText("Could not resolve host");
+  });
+
+}); // 联网用例到此为止
+
 // /proc 读的是访客自己的浏览器。核数在哪儿都拿得到，内存只有 Chromium 系报 ——
 // 所以这条要在两个引擎上分别验，不然"诚实降级"只是句口号
 test("/proc 报的是这台浏览器的真实参数", async ({ page }) => {

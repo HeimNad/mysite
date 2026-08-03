@@ -1,0 +1,62 @@
+{
+ "current_condition": [
+  {
+   "FeelsLikeC": "28",
+   "humidity": "95",
+   "observation_time": "11:16 PM",
+   "pressure": "1008",
+   "temp_C": "24",
+   "uvIndex": "0",
+   "weatherCode": "353",
+   "weatherDesc": [
+    {
+     "value": "Light rain shower"
+    }
+   ],
+   "winddir16Point": "SSE",
+   "windspeedKmph": "7"
+  }
+ ],
+ "nearest_area": [
+  {
+   "areaName": [
+    {
+     "value": "East Kamias"
+    }
+   ],
+   "region": [
+    {
+     "value": "Quezon City"
+    }
+   ],
+   "country": [
+    {
+     "value": "Philippines"
+    }
+   ]
+  }
+ ],
+ "request": [
+  {
+   "query": "Lat 14.63 and Lon 121.05",
+   "type": "LatLon"
+  }
+ ],
+ "weather": [
+  {
+   "date": "2026-08-03",
+   "maxtempC": "26",
+   "mintempC": "24"
+  },
+  {
+   "date": "2026-08-04",
+   "maxtempC": "27",
+   "mintempC": "25"
+  },
+  {
+   "date": "2026-08-05",
+   "maxtempC": "27",
+   "mintempC": "25"
+  }
+ ]
+}

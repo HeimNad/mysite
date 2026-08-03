@@ -8,6 +8,7 @@ import { aptSize, PACKAGES } from "./packages.ts";
 import { getFont, renderFiglet } from "./figlet.ts";
 import { INIT_PID, psTable, type Proc } from "./procs.ts";
 import { dfTable, freeTable, unameLine, type Machine } from "./procfs.ts";
+import { formatWeather, parseWttr } from "./weather.ts";
 import { SITE_URL } from "../site/me.ts";
 import {
   entries,
@@ -53,8 +54,8 @@ export type Ctx = {
   toggleTheme: () => void;
   /** 按需取文件内容（客户端走 fetch + 缓存）。路径必须已确认是文件 */
   read: (segs: string[]) => Promise<string>;
-  /** 取本站某个路径的响应体，curl 用。非 2xx 会抛 */
-  http: (path: string) => Promise<string>;
+  /** 取一个地址的响应体，curl 和 wttr 用。站内路径或 http(s) 绝对地址；非 2xx 会抛 */
+  http: (url: string) => Promise<string>;
   lang: Lang;
   setLang: (lang: Lang) => void;
   /** 就地选译文：ctx.t("中文", "English") */
@@ -521,34 +522,87 @@ export const COMMANDS: Record<string, Cmd> = {
     usage: { zh: "curl <路径>", en: "curl <path>" },
     man: {
       zh:
-        "访问本站的接口。带主机名的地址会解析失败。\n" +
+        "本站的接口：\n" +
         "  curl /api/me                     我的信息\n" +
         "  curl /api/posts                  文章列表\n" +
         "  curl /api/fs/<路径>              任意一个文件\n" +
         "  curl /feed.xml                   RSS\n" +
-        "  curl /robots.txt                 robots\n" +
+        "\n" +
+        "外站也真的会去请求，但读不读得到不由这台机器决定：浏览器只允许读\n" +
+        "那些明确发了 Access-Control-Allow-Origin 的站点。所以\n" +
+        "  curl https://wttr.in/tokyo?format=j1     能读（对方放行了）\n" +
+        "  curl https://example.com                 读不到（对方没放行）\n" +
+        "失败时浏览器不会告诉脚本具体原因，只知道请求没能完成。\n" +
         "输出可以进管道。",
       en:
-        "Reaches this site's own endpoints. Anything with a hostname fails to resolve.\n" +
+        "This site's own endpoints:\n" +
         "  curl /api/me                     who I am\n" +
         "  curl /api/posts                  the article list\n" +
         "  curl /api/fs/<path>              any file\n" +
         "  curl /feed.xml                   the RSS feed\n" +
-        "  curl /robots.txt                 robots\n" +
+        "\n" +
+        "Outside hosts are really requested, but whether the response can be read\n" +
+        "is not this machine's call: a browser only lets a page read hosts that\n" +
+        "send Access-Control-Allow-Origin. So\n" +
+        "  curl https://wttr.in/tokyo?format=j1     works (that host allows it)\n" +
+        "  curl https://example.com                 does not (it doesn't)\n" +
+        "On failure the browser never tells a script why — only that it failed.\n" +
         "The output pipes.",
     },
     run(args, _stdin, ctx) {
       const target = args.find((a) => !a.startsWith("-"));
       if (!target)
-        throw new Error(ctx.t("curl: 用法: curl <路径>", "curl: usage: curl <path>"));
-
-      // 带主机名的地址一律失败 —— 这台机器只有回环，curl 的报错原样照抄
-      const host = /^(?:[a-z]+:)?\/\/([^/]+)/i.exec(target)?.[1] ?? /^([\w.-]+\.[a-z]{2,})/i.exec(target)?.[1];
-      if (host) throw new Error(`curl: (6) Could not resolve host: ${host}`);
-      if (!target.startsWith("/"))
+        throw new Error(ctx.t("curl: 用法: curl <地址>", "curl: usage: curl <url>"));
+      // 只认 http(s) 和站内绝对路径。file:// 之类浏览器本来也会拒，早点说清楚
+      if (!/^https?:\/\//i.test(target) && !target.startsWith("/"))
         throw new Error(`curl: (3) URL rejected: Bad hostname`);
-
       return ctx.http(target);
+    },
+  },
+
+  wttr: {
+    desc: { zh: "查天气", en: "check the weather" },
+    usage: { zh: "wttr [城市]", en: "wttr [city]" },
+    man: {
+      zh:
+        "不给城市就按你的 IP 定位。\n" +
+        "\n" +
+        "这是本站唯一一条会往站外发请求的命令 —— 它去 wttr.in 取数据，\n" +
+        "所以你的 IP 会被那台服务器看到。不想被看到就别敲，或者给一个城市名。\n" +
+        "\n" +
+        "取回来的是 JSON，排版是这台机器自己做的：wttr.in 的字符画只发给\n" +
+        "curl 那类客户端，浏览器去要会得到一整页 HTML。",
+      en:
+        "With no city, wttr.in locates you by IP.\n" +
+        "\n" +
+        "This is the only command here that talks to anything outside this site.\n" +
+        "It fetches from wttr.in, so that server sees your IP. Pass a city name\n" +
+        "if you would rather it didn't, or skip the command.\n" +
+        "\n" +
+        "The JSON comes from wttr.in; the layout is this machine's own, because\n" +
+        "wttr.in only serves its ASCII art to curl-like clients — a browser asking\n" +
+        "for it gets a full HTML page.",
+    },
+    async run(args, _stdin, ctx) {
+      const city = args.filter((a) => !a.startsWith("-")).join(" ");
+      const url = `https://wttr.in/${encodeURIComponent(city)}?format=j1`;
+      let body: string;
+      try {
+        body = await ctx.http(url);
+      } catch {
+        throw new Error(
+          ctx.t(
+            `wttr: 没能拿到 ${city || "你所在位置"} 的天气。地名写错了，或者 wttr.in 这会儿不通。`,
+            `wttr: could not get the weather for ${city || "your location"}. Bad place name, or wttr.in is down.`
+          )
+        );
+      }
+      try {
+        return formatWeather(parseWttr(body), ctx.t, city === "");
+      } catch (e) {
+        // 地名查不到时 wttr 回的是一行纯文本，原样转达比自己编好
+        throw new Error(`wttr: ${e instanceof Error ? e.message : String(e)}`);
+      }
     },
   },
 

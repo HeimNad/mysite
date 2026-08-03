@@ -219,12 +219,35 @@ export default function Terminal({
     };
   }
 
-  /** curl 用：取本站某个路径。非 2xx 按 curl -f 的说法报错，不然会吐出一整页 404 HTML */
-  async function fetchPath(path: string): Promise<string> {
-    const res = await fetch(path);
+  /**
+   * curl 和 wttr 用。站内路径照常；站外地址也真的会发出去 ——
+   * 这台"机器"确实有网络，只是浏览器只让读那些发了 CORS 头的站点。
+   *
+   * 跨源被拦时 fetch 抛的是一个不带原因的 TypeError（浏览器故意不告诉脚本），
+   * 所以这里只说"没能完成"，不假装知道是 DNS 还是 CORS
+   */
+  const MAX_BODY = 200_000; // 一次 curl 别把整个终端灌爆
+
+  async function fetchPath(url: string): Promise<string> {
+    const external = /^https?:\/\//i.test(url);
+    let res: Response;
+    try {
+      res = await fetch(url);
+    } catch {
+      const host = external ? new URL(url).host : window.location.host;
+      throw new Error(
+        `curl: (7) Failed to connect to ${host}\n` +
+          (lang === "zh"
+            ? "请求没能完成。浏览器不会告诉脚本原因；跨站时最常见的是对方没发 Access-Control-Allow-Origin。"
+            : "The request did not complete. Browsers never tell a script why; across sites the usual cause is a missing Access-Control-Allow-Origin.")
+      );
+    }
     if (!res.ok)
       throw new Error(`curl: (22) The requested URL returned error: ${res.status}`);
-    return (await res.text()).trimEnd();
+    const text = (await res.text()).trimEnd();
+    return text.length > MAX_BODY
+      ? text.slice(0, MAX_BODY) + `\n… (${text.length - MAX_BODY} more bytes)`
+      : text;
   }
 
   /** ctx 的构造。开场序列也要用，所以抽出来 —— lang 可以覆盖，因为 setLang 要下一轮渲染才生效 */

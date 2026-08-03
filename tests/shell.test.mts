@@ -254,17 +254,18 @@ test("ls -l 的大小按字符数算，中文不会算成三倍", async () => {
   assert.match(r.output as string, /\s2 Jul/, "两个汉字应该算 2，不是 UTF-8 的 6 字节");
 });
 
-test("curl 只认本站路径，带主机名的一律解析失败", async () => {
-  // 这台机器没有对外网络，报错照抄真 curl 的编号
-  assert.match((await err("curl https://example.com"))!, /\(6\) Could not resolve host: example\.com/);
-  assert.match((await err("curl //evil.test/x"))!, /Could not resolve host: evil\.test/);
-  assert.match((await err("curl example.com"))!, /Could not resolve host: example\.com/);
-  assert.match((await err("curl relative/path"))!, /\(3\) URL rejected/);
-  assert.match((await err("curl"))!, /用法/);
-
-  // 本站路径原样传给 http
+test("curl 认站内路径和 http(s) 绝对地址，其余直接拒", async () => {
+  // 以前这里假装"这台机器只有回环"，站外一律报 DNS 失败。那句话在
+  // wttr 真的能取到数据之后就是假的了 —— 现在站外地址真的发出去，
+  // 读不读得到由浏览器的同源策略说了算（见 man curl）
+  assert.equal(await out("curl https://wttr.in/tokyo"), "GET https://wttr.in/tokyo");
   assert.equal(await out("curl /api/posts"), "GET /api/posts");
-  assert.equal(await out("curl /feed.xml"), "GET /feed.xml");
+
+  // 既不是 http(s) 也不是绝对路径的，连发都不发
+  assert.match((await err("curl relative/path"))!, /\(3\) URL rejected/);
+  assert.match((await err("curl example.com"))!, /\(3\) URL rejected/);
+  assert.match((await err("curl file:///etc/passwd"))!, /\(3\) URL rejected/);
+  assert.match((await err("curl"))!, /用法/);
 });
 
 test("curl 的输出能进管道", async () => {
