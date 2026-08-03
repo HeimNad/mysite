@@ -9,11 +9,12 @@ import { visibleCommands, type Ctx, type PostMeta } from "@/lib/terminal/command
 import { PACKAGES } from "@/lib/terminal/packages";
 import { loginDate } from "@/lib/terminal/command-utils";
 import { LANG_KEY, THEME_KEY } from "@/app/preferences";
-import { linkify, renderVisual, type ProcTable } from "@/components/terminal-visuals";
+import { linkify, renderVisual, VimScreen, type ProcTable } from "@/components/terminal-visuals";
 import { INIT_PID, type Proc } from "@/lib/terminal/procs";
 import { PROC_FILES, PROC_TREE, type Machine } from "@/lib/terminal/procfs";
 import { openPager, pagerKey, pagerView, type Pager } from "@/lib/terminal/pager";
 import { expandHistory, searchBack } from "@/lib/terminal/history";
+import { insertText, openVim, vimKey, vimView, type Vim } from "@/lib/terminal/vim";
 import { detectLang, type Lang } from "@/lib/site/i18n";
 import { execute } from "@/lib/terminal/shell";
 import { ME, SHELL_NAME } from "@/lib/site/me";
@@ -54,6 +55,11 @@ export default function Terminal({
   const [pager, setPager] = useState<Pager | null>(null);
   // Ctrl+R 的反向搜索。query 由输入框持有（输入法才合成得了），idx 是命中的那条
   const [rsearch, setRsearch] = useState<{ query: string; idx: number } | null>(null);
+  // vim 开着时键盘归它。和 pager 同一类：接管键盘的程序
+  const [vim, setVim] = useState<Vim | null>(null);
+  // 输入法合成中：这期间的中间态不该逐字插进缓冲区
+  const composing = useRef(false);
+  const [composeHint, setComposeHint] = useState("");
   const screenRef = useRef<HTMLDivElement>(null);
 
   // /proc 只挂在客户端：它的内容每次读都要重算，没有静态端点可给
@@ -306,6 +312,7 @@ export default function Terminal({
       panic: setPanic,
       machine,
       page: (text, name) => setPager(openPager(text, name, viewportRows())),
+      edit: (text, name) => setVim(openVim(text, name, viewportRows())),
     };
   }
 
@@ -410,6 +417,22 @@ export default function Terminal({
     // 输入法组合期间这些键都归输入法：回车是选词不是执行，↑↓ 是翻候选词不是翻历史。
     // 不挡的话中文用户按回车会把半截拼音当命令跑掉
     if (e.nativeEvent.isComposing) return;
+
+    // vim 开着时键盘归它。插入模式下可打印字符要放给输入框，
+    // 否则输入法没法合成 —— 和 less 的搜索同一个道理
+    if (vim) {
+      const printable = e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey;
+      if (vim.mode === "insert" && printable) return; // 交给输入框，onChange 里插入
+      e.preventDefault();
+      const next = vimKey(vim, e.key);
+      if (next === null) {
+        // 退出时把最后一屏留在输出流里，和 less 一致
+        pushLine(vimView(vim).body.join("\n").replace(/\s+$/, ""));
+        setVim(null);
+      } else setVim(next);
+      edit("");
+      return;
+    }
 
     // less 开着的时候键盘归它，提示符一个键也收不到 —— 和真终端一样。
     // q 退出时把这一屏留在输出流里，翻到哪儿就留哪儿
@@ -635,7 +658,7 @@ export default function Terminal({
     endRef.current?.scrollIntoView({ block: "end" });
     // pager 也要进依赖：less 打开时 lines 不变，不滚的话整个分页器渲染在屏幕外，
     // 命令敲完看上去什么都没发生
-  }, [lines, pager]);
+  }, [lines, pager, vim]);
 
   // 渲染期抛才会被 error.tsx 接住 —— 命令层的异常会被 shell 的 try/catch 吃掉
   if (panic) throw new Error(panic);
@@ -652,6 +675,7 @@ export default function Terminal({
       <div role="log" aria-live="polite" aria-atomic="false" ref={screenRef}>
         {lines}
       </div>
+      {vim && <VimScreen vim={vim} hint={composeHint} />}
       {pager && (
         <div className="pager">
           <pre>{pagerView(pager).body.join("\n")}</pre>
@@ -660,7 +684,7 @@ export default function Terminal({
       )}
       {/* less 开着时提示符看不见，但输入框必须留在可聚焦状态 ——
           用 hidden 属性会让它收不到任何按键，less 就成了摆设 */}
-      <div className={"input-line" + (pager ? " captured" : "")}>
+      <div className={"input-line" + (pager || vim ? " captured" : "")}>
         {/* 搜索态下提示符换成 bash 那句，输入框就嵌在反引号中间 */}
         <span className="prompt">
           {rsearch ? "(reverse-i-search)`" : prompt}
@@ -669,6 +693,15 @@ export default function Terminal({
           ref={inputRef}
           value={input}
           onChange={(e) => {
+            // vim 插入模式：输入框只是中转，内容立刻进缓冲区再清空
+            if (vim?.mode === "insert") {
+              if (composing.current) return; // 合成中的中间态不插
+              if (e.target.value) {
+                setVim(insertText(vim, e.target.value));
+                edit("");
+              }
+              return;
+            }
             setInput(e.target.value);
             // 搜索态下输入框就是搜索缓冲，状态行跟着它走
             if (pager && pager.typing !== null)
@@ -681,6 +714,19 @@ export default function Terminal({
             }
           }}
           onKeyDown={onKeyDown}
+          onCompositionStart={() => {
+            composing.current = true;
+          }}
+          onCompositionUpdate={(e) => setComposeHint(e.data)}
+          onCompositionEnd={(e) => {
+            composing.current = false;
+            setComposeHint("");
+            // 合成完的整串一次插进去，中间态不进缓冲区
+            if (vim?.mode === "insert") {
+              if (e.data) setVim(insertText(vim, e.data));
+              edit("");
+            }
+          }}
           autoFocus
           autoComplete="off"
           autoCapitalize="off"

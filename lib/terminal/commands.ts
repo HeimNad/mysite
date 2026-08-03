@@ -84,6 +84,8 @@ export type Ctx = {
   machine: () => Promise<Machine>;
   /** 把文本交给分页器。键盘从此归 less，直到用户按 q */
   page: (text: string, name: string) => void;
+  /** 把文本交给编辑器。键盘从此归 vim，直到 :q */
+  edit: (text: string, name: string) => void;
 };
 
 /**
@@ -957,12 +959,38 @@ export const COMMANDS: Record<string, Cmd> = {
   },
   vim: {
     desc: { zh: "文本编辑器", en: "text editor" },
-    hidden: true,
-    run: (_a, _s, ctx) =>
-      ctx.t(
-        "你已进入 vim。开玩笑的 —— 但如果是真的，你现在该输 :q 了。",
-        "You are now in vim. Just kidding — but if you were, you would be typing :q about now."
-      ),
+    usage: { zh: "vim [文件]", en: "vim [file]" },
+    man: {
+      zh:
+        "真的能编辑，但保存不了 —— 这台机器的文件系统是只读的，:w 会给你\n" +
+        "E45，和真 vim 打开只读文件时一模一样。改归改，落不了盘。\n" +
+        "\n" +
+        "  h j k l   移动          w / b     按词前后跳\n" +
+        "  0 / $     行首 / 行尾   gg / G    文件头 / 文件尾\n" +
+        "  i a I A   进插入模式    o / O     下方 / 上方开新行\n" +
+        "  x / dd    删字符 / 删行 u         撤销\n" +
+        "  Esc       回普通模式    :q :q!    退出\n" +
+        "\n" +
+        "插入模式支持输入法，中文照常打。",
+      en:
+        "It really edits, and it really cannot save: the filesystem here is\n" +
+        "read-only, so :w answers E45 exactly as vim does on a read-only file.\n" +
+        "Changes are real; they just never reach a disk.\n" +
+        "\n" +
+        "  h j k l   move          w / b     word forward / back\n" +
+        "  0 / $     line ends     gg / G    top / bottom\n" +
+        "  i a I A   insert mode   o / O     open line below / above\n" +
+        "  x / dd    delete        u         undo\n" +
+        "  Esc       normal mode   :q :q!    quit\n" +
+        "\n" +
+        "Insert mode accepts IME input.",
+    },
+    async run(args, stdin, ctx) {
+      const file = args.find((a) => !a.startsWith("-"));
+      // 没给文件也没有 stdin 时开一个空缓冲区，和真 vim 一样
+      const text = file || stdin !== null ? await readInput(args, stdin, ctx, "vim") : "";
+      ctx.edit(text, file ?? "[No Name]");
+    },
   },
   ":q": {
     desc: { zh: "退出 vim", en: "quit vim" },

@@ -58,7 +58,9 @@ export function ctxOf(
   panics: string[] = [],
   machine: Machine = FIXED_MACHINE,
   /** less 分页的内容记在这里，供断言 */
-  paged: { text: string; name: string }[] = []
+  paged: { text: string; name: string }[] = [],
+  /** vim 打开的内容记在这里，供断言 */
+  edited: { text: string; name: string }[] = []
 ): Omit<Ctx, "piped"> {
   return {
     pkgs,
@@ -75,6 +77,7 @@ export function ctxOf(
     panic: (m) => panics.push(m),
     machine: async () => machine,
     page: (text, name) => paged.push({ text, name }),
+    edit: (text, name) => edited.push({ text, name }),
     // 测试里不发请求，直接把内容塞进去，并报一个固定的字节数和耗时
     install: async (name) => {
       const body = `installed:${name}`;

@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { donutFrame } from "@/lib/terminal/donut";
 import type { Visual } from "@/lib/terminal/commands";
+import { vimView, type Vim } from "@/lib/terminal/vim";
 import avatarAscii from "@/components/avatar-ascii.json";
 
 /**
@@ -174,5 +175,36 @@ export function Donut({ procs }: { procs: ProcTable }) {
     <pre className="sl" aria-label="一个旋转的甜甜圈 / a spinning donut">
       {donutFrame(angle.a, angle.b)}
     </pre>
+  );
+}
+
+/**
+ * vim 的屏幕。光标是真的画出来的方块 —— 它标的是缓冲区里的位置，
+ * 不是一个装饰性的闪烁条：h/j/k/l 走到哪它就在哪
+ */
+export function VimScreen({ vim, hint }: { vim: Vim; hint: string }) {
+  const { body, status, cursor } = vimView(vim);
+  return (
+    <div className="vim">
+      <pre>
+        {body.map((text, i) => {
+          if (i !== cursor.row) return <div key={i}>{text || " "}</div>;
+          // 光标那一行拆成三段，中间那个字符反色
+          const at = text[cursor.col] ?? " ";
+          return (
+            <div key={i}>
+              {text.slice(0, cursor.col)}
+              <span className="vim-cursor">{at}</span>
+              {text.slice(cursor.col + 1)}
+            </div>
+          );
+        })}
+      </pre>
+      <div className="vim-status">
+        {status}
+        {/* 合成中的拼音要看得见，否则中文是盲打 */}
+        {hint && <span className="vim-compose">{hint}</span>}
+      </div>
+    </div>
   );
 }

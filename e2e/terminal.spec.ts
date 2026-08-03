@@ -275,6 +275,72 @@ test("github.txt 是构建期抓的真数据，并说明了它有多旧", async 
   await expect(log.locator(".line").last()).toHaveText("1");
 });
 
+// vim 的状态机单测全覆盖了。这里只验浏览器才验得了的：键盘归它、
+// 输入法能打中文、光标是真画出来的
+test.describe("vim", () => {
+  test.use({ viewport: { width: 900, height: 400 } });
+
+  test("vim 真能编辑，但保存不了 —— 文件系统是只读的", async ({ page }) => {
+    const { log, input } = await boot(page);
+    const status = page.locator(".vim-status");
+
+    await run(page, "vim skills.txt");
+    await expect(status).toBeVisible();
+    await expect(status, "打开时报文件名和大小").toContainText("skills.txt");
+    await expect(status).toBeInViewport();
+
+    // 光标是真画出来的，j 走一行它跟着走
+    const cursorLine = () => page.locator(".vim pre > div").filter({ has: page.locator(".vim-cursor") });
+    await expect(cursorLine()).toHaveCount(1);
+    const before = await cursorLine().innerText();
+    await page.keyboard.press("j");
+    expect(await cursorLine().innerText()).not.toBe(before);
+
+    // 编辑是真的
+    await page.keyboard.press("i");
+    await expect(status).toContainText("-- INSERT --");
+    await page.keyboard.type("XY");
+    await expect(page.locator(".vim pre")).toContainText("XY");
+    await page.keyboard.press("Escape");
+
+    // 但存不下去：真 vim 打开只读文件也是这句
+    await page.keyboard.type(":w");
+    await page.keyboard.press("Enter");
+    await expect(status).toContainText("E45: 'readonly' option is set");
+
+    // 改过之后 :q 会拦，:q! 才走
+    await page.keyboard.type(":q");
+    await page.keyboard.press("Enter");
+    await expect(status).toContainText("E37: No write since last change");
+
+    // 这些按键一个都没漏进提示符
+    await expect(input).toHaveValue("");
+
+    await page.keyboard.type(":q!");
+    await page.keyboard.press("Enter");
+    await expect(status).toBeHidden();
+    await run(page, "whoami");
+    await expect(log).toContainText("heimnad");
+  });
+
+  test("插入模式能打中文 —— 输入法合成完整串进缓冲区", async ({ page }) => {
+    await boot(page);
+    await run(page, "vim skills.txt");
+    await expect(page.locator(".vim-status")).toBeVisible();
+
+    await page.keyboard.press("i");
+    await page.keyboard.type("你好");
+    await expect(page.locator(".vim pre")).toContainText("你好");
+
+    // 内容不能落到文件里：退出后 cat 还是原样
+    await page.keyboard.press("Escape");
+    await page.keyboard.type(":q!");
+    await page.keyboard.press("Enter");
+    await run(page, "cat skills.txt");
+    await expect(term(page).log.locator(".line").last()).not.toContainText("你好");
+  });
+});
+
 // less 是这台机器上第一个接管键盘的程序。状态机在单测里全覆盖了，
 // 这里只验那件单测验不了的事：开着的时候提示符一个键都收不到
 test.describe("less", () => {

@@ -149,6 +149,16 @@ pre { font: inherit; }
   overflow-x: auto; /* 长代码行自己滚，别把页面撑横 */
   margin: 1.5rem 0;
 }
+/* vim 的屏幕。光标反色画出来，标的是缓冲区里的真实位置 */
+.vim pre { margin: 0; white-space: pre; overflow-x: auto; }
+.vim-cursor { background: var(--fg); color: var(--bg); }
+.vim-status { color: var(--dim); white-space: pre; }
+.vim-compose {
+  margin-left: 0.5rem;
+  border-bottom: 1px dashed var(--accent);
+  color: var(--fg);
+}
+
 /* Ctrl+R 搜索时提示符右边显示命中的那条命令 */
 .rsearch { color: var(--dim); white-space: pre; }
 
