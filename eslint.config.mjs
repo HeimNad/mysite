@@ -53,6 +53,8 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // npm run apt 编出来的包，是压缩产物不是源码
+    "public/apt/**",
   ]),
 ]);
 

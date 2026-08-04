@@ -9,8 +9,8 @@
 // 真 htop 有这些列，这里没有。缺一列比填一个看着合理的数字诚实
 
 import { elapsed, type Proc } from "./procs.ts";
-import { human, type Machine } from "./procfs.ts";
-import { padCols } from "./text.ts";
+import type { Machine } from "./procfs.ts";
+import { human, padCols } from "./text.ts";
 
 export type HtopState = { selected: number };
 

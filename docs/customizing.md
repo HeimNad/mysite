@@ -144,49 +144,32 @@ ll: "ls -l",
 2. `lib/terminal/packages.ts` 里登记 `path` `version` `desc`
 3. 给命令加 `pkg: "包名"`
 
-**程序包**（vim、htop）—— 载荷是打包器切出来的 chunk：
+**程序包**（vim、htop）—— 载荷是编译出来的独立 ES 模块：
 
-1. `PACKAGES` 里登记，**不写 `path`**
-2. `terminal.tsx` 的 `installPkg` 里加一行 `await import(...)`
-3. 模块**只能动态 import**。任何地方留一个静态 `import` 都会把它拽回主包，
-   "下载"就成了演戏 —— 类型用 `import type`，屏幕组件只收算好的数据
+1. `PACKAGES` 里登记 `path`（放 `public/apt/pool/universe/<首字母>/<包名>/`）
+2. `scripts/gen-apt.mjs` 的 `ENTRIES` 加一行入口
+3. `terminal.tsx` 的 `installPkg` 里加一行 `import(path)`
+4. **跑 `npm run apt`**，产物提交进仓库（和 `npm run avatar` 一个模式）
 
-字节数从 Resource Timing 的 `encodedBodySize` 读，也就是浏览器实际收到的量；
-`Get:1` 显示的是真实 chunk 地址（`/_next/static/chunks/...`）。地址不好看，
-但那确实是这台机器取程序的地方 —— 在 `/apt/` 下摆一个好看的假路径是撒谎。
+模块由 esbuild 打包，依赖一起打进去 —— 真的 .deb 也是各自带一份。装它就是
+`import` 那个地址：一次下载，`Get:1` 显示的就是刚取的那个文件，浏览器和
+`curl` 都打得开。
 
-然后：没装的时候 `help`、Tab 补全和命令查找里都没有它，敲了会得到 Ubuntu 那句
-`Command 'x' not found, but can be installed with: sudo apt install x`；装了就全都有。
-`/apt/` 那个镜像目录页也会自己长出新路径。
+**三条硬约束**：
 
-**这里的下载是真的。** `apt` 输出里 `Get:1` 那行的地址浏览器能打开，字节数和速率
-是那次 fetch 真实测出来的 —— 所以别在这条路径上加假的进度条或假的延迟。
+- **不能静态 import 那个模块**。任何一处静态引用都会把它拽回主包，"下载"
+  就成了演戏。类型用 `import type`，屏幕组件只收算好的数据，动态 import
+  要带 `/* turbopackIgnore: true */`。
+- **不能带 `process`**。包在浏览器里是裸跑的，没有 Next 的 `process.env` 替换。
+  `htop` 曾经通过 `procfs.ts` 拽进 `me.ts` 的模块级 `process.env`，装完一敲
+  就是 `process is not defined` —— 所以 `human()` 挪去了 `text.ts`。
+- **不能又 fetch 又 import**。那是同样的字节下载两遍，第二遍纯粹为了让日志好看。
 
-### shell 层的东西（历史展开、Ctrl+R）
+这三条都有测试盯着（`tests/apt.test.mts`），包和源码对不上也会红。
 
-`!!`／`!n`／`!前缀` 和 `Ctrl+R` **不是命令** —— 它们发生在命令查找之前，
-所以不在 `COMMANDS` 表里、也没有自己的 man 页（用法写在 `man history` 里）。
-纯逻辑在 `lib/terminal/history.ts`，接线在 `terminal.tsx` 的 `run()` 和 `onKeyDown`。
-
-两条和 bash 对齐的行为，别改掉：**回显的是展开后的命令**（跑的是哪条得看得见），
-**展开失败的不进历史**。
-
-`Ctrl+R` 的搜索词同样由输入框持有，理由和 `less` 的 `/` 一样 —— 全部
-`preventDefault` 的话输入法没法合成。
-
-### 构建期抓外部数据（github 这一类）
-
-`content/github.txt` 是 `npm run github` 从 GitHub API 抓下来生成的，**和
-`npm run avatar` 一个模式**：显式跑一次，产物提交进仓库，构建只读文件。
-
-不在构建期抓的原因很具体：GitHub 未认证接口是**每小时 60 次、按 IP 算**，
-而 CI 的 runner 共享出口 IP —— 放进构建就等于让别人的用量决定你能不能发布。
-
-生成的文件走普通内容管线，所以 `ls`、`cat`、管道、Tab 补全全是白拿的。
-
-**代价要写在页面上**：数据停在抓取那一刻，不会自己更新。所以文件最后一行印着
-抓取日期和"重新构建才会更新" —— 和版本号用 commit hash 一个道理，宁可说清楚
-它有多旧。换了 `me.ts` 里的 `github` 之后记得重跑一次。
+为什么不用打包器自己切的 chunk：那地址是 `/_next/static/chunks/<哈希>.js`，
+而 `Get:` 应该指向软件源。**跳转解决不了** —— `import()` 的地址是构建期写死在
+产物里的，我们没有拦截点，摆一个跳过去的假路径只会让字节下两遍。
 
 ### 接管键盘的程序（less 这一类）
 

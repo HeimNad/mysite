@@ -67,7 +67,7 @@ test("sudo apt install 走完整个流程，数字来自真实下载", async () 
   assert.match(outText, /The following NEW packages will be installed:/);
   // Get: 那一行必须是真地址，而且和包表里登记的一致
   assert.ok(
-    outText.includes(PACKAGES.figlet.path!),
+    outText.includes(PACKAGES.figlet.path),
     `Get: 行要带真实路径，实际是:\n${outText}`
   );
   assert.match(outText, /Setting up figlet \(2\.2\.5-3\) \.\.\./);
@@ -95,13 +95,39 @@ test("apt list 列出包，装了的标 [installed]", async () => {
   assert.match((await run("apt list", await withFiglet())).output as string, /figlet[\s\S]*\[installed\]/);
 });
 
-test("数据包登记的文件真实存在，大小也对得上", async () => {
+test("每个包登记的文件都真实存在，大小也对得上", async () => {
   for (const [name, pkg] of Object.entries(PACKAGES)) {
-    // 代码包没有文件：它的载荷是打包器切出来的 chunk，装的时候现取
-    if (!pkg.path) continue;
     const body = await readFile("public" + pkg.path, "utf8");
     assert.ok(body.length > 0, `${name} 的文件是空的`);
     // apt 输出里说的"解压后占用"不该比文件本身还小，否则那个数字没意义
     assert.ok(pkg.installedSize >= body.length, `${name} 的 installedSize 比文件还小`);
+  }
+});
+
+test("程序包不能带 process —— 它在浏览器里是裸跑的", async () => {
+  // htop 曾经通过 procfs.ts 拽进了 me.ts 的模块级 process.env，
+  // 装上之后一敲就是 "process is not defined"
+  for (const name of ["vim", "htop"]) {
+    const code = await readFile("public" + PACKAGES[name].path, "utf8");
+    assert.doesNotMatch(code, /\bprocess\b/, `${name} 的包里有 process，浏览器里会炸`);
+    assert.doesNotMatch(code, /\brequire\(/, `${name} 的包里有 require`);
+  }
+});
+
+test("包是当前源码编出来的 —— 改了没重跑 npm run apt 就会红", async () => {
+  const { build } = await import("esbuild");
+  for (const [name, entry] of [
+    ["vim", "lib/terminal/vim.ts"],
+    ["htop", "lib/terminal/htop.ts"],
+  ] as const) {
+    const r = await build({
+      entryPoints: [entry], bundle: true, format: "esm",
+      target: "es2022", minify: true, write: false, outfile: "x.js",
+    });
+    const onDisk = await readFile("public" + PACKAGES[name].path, "utf8");
+    assert.equal(
+      r.outputFiles[0].text, onDisk,
+      `${name} 的包和源码对不上 —— 跑一下 npm run apt`
+    );
   }
 });

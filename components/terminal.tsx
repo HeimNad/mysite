@@ -182,36 +182,31 @@ export default function Terminal({
    * 装一个包：真的去 fetch 那个文件，把内容留在内存里，并记下"装过"。
    * 返回真实的字节数和耗时 —— apt 输出里的数字全部来自这里，没有一个是编的
    */
-  async function installPkg(
-    name: string
-  ): Promise<{ bytes: number; ms: number; from?: string }> {
+  async function installPkg(name: string): Promise<{ bytes: number; ms: number }> {
     const pkg = PACKAGES[name];
     if (!pkg) throw new Error(`E: Unable to locate package ${name}`);
     const started = performance.now();
-    let bytes: number;
-    let from: string | undefined; // 代码包实际是从哪个地址取来的
-    let body = pkg.version; // 门禁只看有没有这一项，代码包不需要内容
 
-    if (pkg.path) {
-      // 数据包：文件真的在 /apt/ 下面躺着，浏览器打得开
+    // 程序包本身就是 ES 模块，import 它就是在下载它 —— 不能再 fetch 一遍，
+    // 那是同样的字节取两次。字节数从 Resource Timing 读（浏览器实际收到的量）
+    let body = pkg.version; // 门禁只看这一项在不在
+    let bytes: number;
+
+    if (name === "vim" || name === "htop") {
+      // turbopackIgnore：不加的话打包器会把模块拽回主包，"下载"就成了演戏
+      const mod = await import(/* webpackIgnore: true */ /* turbopackIgnore: true */ pkg.path);
+      if (name === "vim") vimMod.current = mod as typeof import("@/lib/terminal/vim");
+      else htopMod.current = mod as typeof import("@/lib/terminal/htop");
+      const entry = performance
+        .getEntriesByType("resource")
+        .findLast((r) => r.name.endsWith(pkg.path)) as PerformanceResourceTiming | undefined;
+      bytes = entry?.encodedBodySize || 0;
+    } else {
       const res = await fetch(pkg.path);
       if (!res.ok)
         throw new Error(`E: Failed to fetch ${pkg.path}  ${res.status} ${res.statusText}`);
       body = await res.text();
       bytes = new TextEncoder().encode(body).length;
-    } else {
-      // 代码包：真的去取那个 chunk。字节数从 Resource Timing 读，
-      // 也就是浏览器实际收到的量 —— 不是我写在表里的常数
-      const before = performance.getEntriesByType("resource").length;
-      if (name === "vim") vimMod.current = await import("@/lib/terminal/vim");
-      else if (name === "htop") htopMod.current = await import("@/lib/terminal/htop");
-      else throw new Error(`E: Unable to locate package ${name}`);
-      const loaded = performance
-        .getEntriesByType("resource")
-        .slice(before) as PerformanceResourceTiming[];
-      // encodedBodySize 是压缩后的载荷大小，缓存命中时 transferSize 会是 0
-      bytes = loaded.reduce((n, r) => n + (r.encodedBodySize || 0), 0);
-      from = loaded[loaded.length - 1]?.name;
     }
     const ms = performance.now() - started;
 
@@ -222,7 +217,7 @@ export default function Terminal({
     } catch {
       // 隐私模式下记不住，这次会话仍然可用
     }
-    return { bytes, ms, from };
+    return { bytes, ms };
   }
 
   /**

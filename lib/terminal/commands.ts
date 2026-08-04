@@ -70,7 +70,7 @@ export type Ctx = {
   /** 已装的包 → 它的内容。带 pkg 的命令要装了才查得到 */
   pkgs: Map<string, string>;
   /** 真去下载一个包，返回真实的字节数和耗时 —— apt 的输出不编数字 */
-  install: (name: string) => Promise<{ bytes: number; ms: number; from?: string }>;
+  install: (name: string) => Promise<{ bytes: number; ms: number }>;
   /** 只有 sudo 转交过来的时候才是 true */
   asRoot: boolean;
   /** 这台机器上真在跑的东西 —— 动画的定时器，不是编的列表 */
@@ -964,18 +964,14 @@ export const COMMANDS: Record<string, Cmd> = {
     man: {
       zh:
         "装东西要 root，所以是 sudo apt install <包>。\n" +
-        "装的是真东西。数据包（figlet 的字体）在 /apt/ 下面躺着，Get: 那一行的\n" +
-        "地址浏览器能打开；程序包（vim、htop）的载荷是打包器切出来的 chunk，\n" +
-        "地址是 /_next/static/chunks/... —— 不好看，但那确实是这台机器取程序的地方。\n" +
-        "两种情况下的字节数都是浏览器实际收到的量，不是写死的常数。\n" +
+        "装的是真东西：Get: 那一行的地址浏览器能打开，curl 也取得到，\n" +
+        "字节数就是那个文件的大小。程序包本身就是一个 ES 模块，装它 = 取它。\n" +
         "装完命令才会出现在 help 和 Tab 补全里。",
       en:
         "Installing needs root, so it is sudo apt install <package>.\n" +
-        "The download is real. A data package (figlet's font) sits under /apt/ and\n" +
-        "its Get: address opens in a browser; a program package (vim, htop) ships as\n" +
-        "a bundler chunk under /_next/static/chunks/ — not pretty, but that is\n" +
-        "genuinely where this machine fetches programs from. Either way the byte\n" +
-        "count is what the browser actually received, not a constant.\n" +
+        "The download is real: the Get: address opens in a browser, curl reaches it,\n" +
+        "and the byte count is that file's size. A program package IS an ES module,\n" +
+        "so installing it and fetching it are the same act.\n" +
         "A package's commands appear in help and Tab completion only once it is installed.",
     },
     async run(args, _stdin, ctx) {
@@ -1018,10 +1014,10 @@ export const COMMANDS: Record<string, Cmd> = {
           "0 upgraded, 0 newly installed, 0 to remove and 0 not upgraded.",
         ].join("\n");
 
-      const { bytes, ms, from } = await ctx.install(name);
+      const { bytes, ms } = await ctx.install(name);
       // 速率是真算的：0 毫秒时按 1 毫秒算，免得除出 Infinity
       const rate = Math.round(bytes / Math.max(ms, 1));
-      const file = pkg.path?.split("/").pop();
+      const file = pkg.path.split("/").pop();
 
       return [
         "Reading package lists... Done",
@@ -1032,12 +1028,10 @@ export const COMMANDS: Record<string, Cmd> = {
         "0 upgraded, 1 newly installed, 0 to remove and 0 not upgraded.",
         `Need to get ${aptSize(bytes)} of archives.`,
         `After this operation, ${aptSize(pkg.installedSize)} of additional disk space will be used.`,
-        // 数据包的地址就是 /apt/ 下那个文件；代码包是打包器切出来的 chunk，
-        // 地址不好看但它是真的 —— 这台机器确实从那里取程序
-        `Get:1 ${from ?? SITE_URL + pkg.path} ${name} all ${pkg.version} [${aptSize(bytes)}]`,
+        `Get:1 ${SITE_URL}${pkg.path} ${name} all ${pkg.version} [${aptSize(bytes)}]`,
         `Fetched ${aptSize(bytes)} in ${(ms / 1000).toFixed(0)}s (${rate.toLocaleString("en-US")} kB/s)`,
         `Selecting previously unselected package ${name}.`,
-        `Preparing to unpack .../${file ?? name + "_" + pkg.version + "_all.deb"} ...`,
+        `Preparing to unpack .../${file} ...`,
         `Unpacking ${name} (${pkg.version}) ...`,
         `Setting up ${name} (${pkg.version}) ...`,
       ].join("\n");

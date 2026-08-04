@@ -6,7 +6,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { execute } from "../lib/terminal/shell.ts";
-import { cpuinfo, dfTable, freeTable, human, meminfo, PROC_FILES, selfStatus, uptimeFile, versionFile } from "../lib/terminal/procfs.ts";
+import { cpuinfo, dfTable, freeTable, meminfo, PROC_FILES, selfStatus, uptimeFile, versionFile } from "../lib/terminal/procfs.ts";
+import { human } from "../lib/terminal/text.ts";
 import type { Machine } from "../lib/terminal/procfs.ts";
 import { VERSION } from "../lib/site/me.ts";
 import { at, ctxOf, FIXED_MACHINE, ROOT } from "./fixtures.mts";

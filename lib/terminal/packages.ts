@@ -7,11 +7,10 @@ import type { Msg } from "../site/i18n.ts";
 export type Pkg = {
   version: string;
   /**
-   * 数据包：文件在本站的路径，真的会被 fetch，浏览器也能直接打开。
-   * 代码包没有这个字段 —— 它的载荷是一个 chunk，地址由打包器决定，
-   * 装的时候现取（见 terminal.tsx 的 installPkg）
+   * 载荷在本站的路径。真的会被 fetch，浏览器和 curl 都打得开。
+   * 数据包是原始文件（字体），程序包是 npm run apt 编出来的独立 ES 模块
    */
-  path?: string;
+  path: string;
   /** apt 输出里的"解压后占用" */
   installedSize: number;
   desc: Msg;
@@ -23,11 +22,13 @@ export const PACKAGES: Record<string, Pkg> = {
   // apt install 的东西
   vim: {
     version: "2:9.1.0016-1",
+    path: "/apt/pool/universe/v/vim/vim_9.1.0016.js",
     installedSize: 3_500_000,
     desc: { zh: "Vi IMproved 文本编辑器", en: "Vi IMproved - enhanced vi editor" },
   },
   htop: {
     version: "3.3.0-4",
+    path: "/apt/pool/universe/h/htop/htop_3.3.0.js",
     installedSize: 350_000,
     desc: { zh: "交互式进程查看器", en: "interactive processes viewer" },
   },

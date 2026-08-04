@@ -21,3 +21,21 @@ export function displayWidth(s: string): number {
 export function padCols(s: string, cols: number): string {
   return s + " ".repeat(Math.max(0, cols - displayWidth(s)));
 }
+
+/**
+ * 1536 → "1.5G"。df -h、free -h、htop 的计量条都用它，1024 进制。
+ *
+ * 放在这里而不是 procfs.ts：那个模块要 import me.ts，而 me.ts 有模块级的
+ * process.env —— htop 是编译成独立模块单独下载的，把 process 带进去会当场炸
+ */
+export function human(bytes: number | null): string {
+  if (bytes === null) return "null";
+  const units = ["B", "K", "M", "G", "T"];
+  let n = bytes;
+  let i = 0;
+  while (n >= 1024 && i < units.length - 1) {
+    n /= 1024;
+    i++;
+  }
+  return (i === 0 ? String(n) : n.toFixed(1)) + units[i];
+}

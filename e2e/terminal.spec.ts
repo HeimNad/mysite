@@ -712,29 +712,33 @@ test("sudo apt install figlet：真下载、真出现、刷新还在", async ({ 
   await expect(term(page).log).toContainText("|_|");
 });
 
-test("装程序包真的会下载一个 chunk，字节数是量出来的", async ({ page }) => {
-  const chunks: string[] = [];
+test("装程序包是从 /apt/ 真取一次，不是从打包器的 chunk", async ({ page }) => {
+  const fromApt: string[] = [];
+  const fromChunks: string[] = [];
   page.on("response", (r) => {
-    if (r.url().includes("/_next/static/chunks/")) chunks.push(r.url());
+    if (r.url().includes("/apt/pool/")) fromApt.push(r.url());
+    if (r.url().includes("/_next/static/chunks/")) fromChunks.push(r.url());
   });
   const { log } = await boot(page);
 
   await run(page, "htop");
   await expect(log).toContainText("Command 'htop' not found");
-  chunks.length = 0; // 开场加载的不算
+  fromApt.length = 0;
+  fromChunks.length = 0;
 
   await run(page, "sudo apt install htop");
   await expect(log).toContainText("Setting up htop");
-  // 关键：真的多下载了一个 chunk，代码不在主包里
-  expect(chunks.length, "装的时候该去取那个 chunk").toBeGreaterThan(0);
 
-  // Get: 行报的是真地址和真字节数 —— 不是包表里写死的常数
-  const text = await log.innerText();
-  const line = text.split("\n").find((l) => l.startsWith("Get:1"))!;
-  expect(line).toContain("/_next/static/chunks/");
-  const shown = /\[(\d+(?:\.\d+)?) (B|kB)\]/.exec(line);
-  expect(shown, `Get: 行没有字节数: ${line}`).toBeTruthy();
-  expect(Number(shown![1])).toBeGreaterThan(0);
+  // 恰好取一次：既 fetch 又 import 的话同样的字节会下两遍
+  expect(fromApt.length, `应该只从 /apt/ 取一次，实际 ${fromApt.length} 次`).toBe(1);
+  expect(fromApt[0]).toContain("htop_3.3.0.js");
+  // 程序不在打包器的产物里 —— 在的话这个"下载"就是演戏
+  expect(fromChunks.length, "装包不该顺带拉 chunk").toBe(0);
+
+  // Get: 行报的就是刚才取的那个地址
+  const line = (await log.innerText()).split("\n").find((l) => l.startsWith("Get:1"))!;
+  expect(line).toContain("/apt/pool/universe/h/htop/htop_3.3.0.js");
+  expect(line, "字节数得是量出来的").toMatch(/\[\d+(\.\d+)? (B|kB)\]/);
 
   await run(page, "htop");
   await expect(page.locator(".htop")).toBeVisible();

@@ -9,6 +9,7 @@
 // 这里只做格式化（纯函数，可测）；读浏览器 API 的活在 UI 层，通过 Ctx 注入
 
 import { OS_NAME, SHELL_NAME, VERSION } from "../site/me.ts";
+import { human } from "./text.ts";
 
 export type Machine = {
   /** navigator.hardwareConcurrency。每个浏览器都有 */
@@ -105,18 +106,6 @@ export const PROC_TREE = {
   self: { status: null },
 };
 
-/** 1536 → "1.5G"。df -h 和 free -h 用，1024 进制 */
-export function human(bytes: number | null): string {
-  if (bytes === null) return "null";
-  const units = ["B", "K", "M", "G", "T"];
-  let n = bytes;
-  let i = 0;
-  while (n >= 1024 && i < units.length - 1) {
-    n /= 1024;
-    i++;
-  }
-  return (i === 0 ? String(n) : n.toFixed(1)) + units[i];
-}
 
 export function unameLine(m: Machine, all: boolean): string {
   if (!all) return OS_NAME;
