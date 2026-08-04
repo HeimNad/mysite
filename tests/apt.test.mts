@@ -67,7 +67,7 @@ test("sudo apt install 走完整个流程，数字来自真实下载", async () 
   assert.match(outText, /The following NEW packages will be installed:/);
   // Get: 那一行必须是真地址，而且和包表里登记的一致
   assert.ok(
-    outText.includes(PACKAGES.figlet.path),
+    outText.includes(PACKAGES.figlet.path!),
     `Get: 行要带真实路径，实际是:\n${outText}`
   );
   assert.match(outText, /Setting up figlet \(2\.2\.5-3\) \.\.\./);
@@ -85,8 +85,9 @@ test("重复装和装不存在的包，说的都是 apt 的话", async () => {
   const again = (await run("sudo apt install figlet", ctx)).output as string;
   assert.match(again, /already the newest version/);
 
-  const missing = await run("sudo apt install vim", ctxOf(ROOT));
-  assert.match(missing.error!, /E: Unable to locate package vim/);
+  // vim 现在是真包了，换一个确实不存在的
+  const missing = await run("sudo apt install emacs", ctxOf(ROOT));
+  assert.match(missing.error!, /E: Unable to locate package emacs/);
 });
 
 test("apt list 列出包，装了的标 [installed]", async () => {
@@ -94,8 +95,10 @@ test("apt list 列出包，装了的标 [installed]", async () => {
   assert.match((await run("apt list", await withFiglet())).output as string, /figlet[\s\S]*\[installed\]/);
 });
 
-test("包表里登记的文件真实存在，大小也对得上", async () => {
+test("数据包登记的文件真实存在，大小也对得上", async () => {
   for (const [name, pkg] of Object.entries(PACKAGES)) {
+    // 代码包没有文件：它的载荷是打包器切出来的 chunk，装的时候现取
+    if (!pkg.path) continue;
     const body = await readFile("public" + pkg.path, "utf8");
     assert.ok(body.length > 0, `${name} 的文件是空的`);
     // apt 输出里说的"解压后占用"不该比文件本身还小，否则那个数字没意义

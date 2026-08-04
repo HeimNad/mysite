@@ -23,8 +23,9 @@ function tree(): Map<string, string[]> {
   };
 
   add("", "pool/");
+  // 只有数据包在这个镜像里有文件；代码包的载荷是打包器切的 chunk
   for (const pkg of Object.values(PACKAGES)) {
-    // /apt/pool/universe/f/figlet/figlet_2.2.5-3.flf → 每一层都要能浏览
+    if (!pkg.path) continue;
     const segs = pkg.path.replace(/^\/apt\//, "").split("/");
     for (let i = 0; i < segs.length; i++) {
       const dir = segs.slice(0, i).join("/");

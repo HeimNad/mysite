@@ -6,14 +6,31 @@ import type { Msg } from "../site/i18n.ts";
 
 export type Pkg = {
   version: string;
-  /** 相对本站的路径。真的会被 fetch，也真的能在浏览器里打开 */
-  path: string;
-  /** apt 输出里的"解压后占用" —— 字体解析成字形表比原文件大一些 */
+  /**
+   * 数据包：文件在本站的路径，真的会被 fetch，浏览器也能直接打开。
+   * 代码包没有这个字段 —— 它的载荷是一个 chunk，地址由打包器决定，
+   * 装的时候现取（见 terminal.tsx 的 installPkg）
+   */
+  path?: string;
+  /** apt 输出里的"解压后占用" */
   installedSize: number;
   desc: Msg;
 };
 
 export const PACKAGES: Record<string, Pkg> = {
+  // 分包的标准就一条：真 Ubuntu 装不装。coreutils（sort/cut/tr/uniq）和 less
+  // 每台机器都有，做成包反而不像真的；vim 和 htop 恰恰是装完系统第一批要敲
+  // apt install 的东西
+  vim: {
+    version: "2:9.1.0016-1",
+    installedSize: 3_500_000,
+    desc: { zh: "Vi IMproved 文本编辑器", en: "Vi IMproved - enhanced vi editor" },
+  },
+  htop: {
+    version: "3.3.0-4",
+    installedSize: 350_000,
+    desc: { zh: "交互式进程查看器", en: "interactive processes viewer" },
+  },
   figlet: {
     version: "2.2.5-3",
     path: "/apt/pool/universe/f/figlet/figlet_2.2.5-3.flf",

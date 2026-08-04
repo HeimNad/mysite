@@ -14,8 +14,9 @@ import { INIT_PID, type Proc } from "@/lib/terminal/procs";
 import { PROC_FILES, PROC_TREE, type Machine } from "@/lib/terminal/procfs";
 import { openPager, pagerKey, pagerView, type Pager } from "@/lib/terminal/pager";
 import { expandHistory, searchBack } from "@/lib/terminal/history";
-import { insertText, openVim, vimKey, type Vim } from "@/lib/terminal/vim";
-import { htopKey, type HtopState } from "@/lib/terminal/htop";
+// 只要类型：值从动态 import 来，静态引用会把整个模块拽回主包
+import type { Vim } from "@/lib/terminal/vim";
+import type { HtopState } from "@/lib/terminal/htop";
 import { detectLang, type Lang } from "@/lib/site/i18n";
 import { execute } from "@/lib/terminal/shell";
 import { ME, SHELL_NAME } from "@/lib/site/me";
@@ -79,6 +80,9 @@ export default function Terminal({
   const [htop, setHtop] = useState<HtopState | null>(null);
   // htop 每一拍的快照。渲染期不该读 performance.now() / navigator，
   // 所以进程、机器参数和延迟都在定时器里量好放进 state
+  // apt 装进来的模块。命令被 pkg 门禁挡着，所以有 vim/htop 状态时它们必然已加载
+  const vimMod = useRef<typeof import("@/lib/terminal/vim") | null>(null);
+  const htopMod = useRef<typeof import("@/lib/terminal/htop") | null>(null);
   const [snap, setSnap] = useState<{ procs: Proc[]; machine: Machine; lag: number | null } | null>(null);
   // 输入法合成中：这期间的中间态不该逐字插进缓冲区
   const composing = useRef(false);
@@ -178,14 +182,37 @@ export default function Terminal({
    * 装一个包：真的去 fetch 那个文件，把内容留在内存里，并记下"装过"。
    * 返回真实的字节数和耗时 —— apt 输出里的数字全部来自这里，没有一个是编的
    */
-  async function installPkg(name: string): Promise<{ bytes: number; ms: number }> {
+  async function installPkg(
+    name: string
+  ): Promise<{ bytes: number; ms: number; from?: string }> {
     const pkg = PACKAGES[name];
     if (!pkg) throw new Error(`E: Unable to locate package ${name}`);
     const started = performance.now();
-    const res = await fetch(pkg.path);
-    if (!res.ok)
-      throw new Error(`E: Failed to fetch ${pkg.path}  ${res.status} ${res.statusText}`);
-    const body = await res.text();
+    let bytes: number;
+    let from: string | undefined; // 代码包实际是从哪个地址取来的
+    let body = pkg.version; // 门禁只看有没有这一项，代码包不需要内容
+
+    if (pkg.path) {
+      // 数据包：文件真的在 /apt/ 下面躺着，浏览器打得开
+      const res = await fetch(pkg.path);
+      if (!res.ok)
+        throw new Error(`E: Failed to fetch ${pkg.path}  ${res.status} ${res.statusText}`);
+      body = await res.text();
+      bytes = new TextEncoder().encode(body).length;
+    } else {
+      // 代码包：真的去取那个 chunk。字节数从 Resource Timing 读，
+      // 也就是浏览器实际收到的量 —— 不是我写在表里的常数
+      const before = performance.getEntriesByType("resource").length;
+      if (name === "vim") vimMod.current = await import("@/lib/terminal/vim");
+      else if (name === "htop") htopMod.current = await import("@/lib/terminal/htop");
+      else throw new Error(`E: Unable to locate package ${name}`);
+      const loaded = performance
+        .getEntriesByType("resource")
+        .slice(before) as PerformanceResourceTiming[];
+      // encodedBodySize 是压缩后的载荷大小，缓存命中时 transferSize 会是 0
+      bytes = loaded.reduce((n, r) => n + (r.encodedBodySize || 0), 0);
+      from = loaded[loaded.length - 1]?.name;
+    }
     const ms = performance.now() - started;
 
     setPkgs((prev) => new Map(prev).set(name, body));
@@ -195,8 +222,7 @@ export default function Terminal({
     } catch {
       // 隐私模式下记不住，这次会话仍然可用
     }
-    // 字节数按 UTF-8 算 —— 那才是网络上真正传输的量
-    return { bytes: new TextEncoder().encode(body).length, ms };
+    return { bytes, ms, from };
   }
 
   /**
@@ -331,7 +357,7 @@ export default function Terminal({
       panic: setPanic,
       machine,
       page: (text, name) => setPager(openPager(text, name, viewportRows())),
-      edit: (text, name) => setVim(openVim(text, name, viewportRows())),
+      edit: (text, name) => setVim(vimMod.current!.openVim(text, name, viewportRows())),
       monitor: () => {
         setSnap(null); // 清掉上一次的，别让旧进程表闪一下
         setHtop({ selected: 0 });
@@ -344,8 +370,8 @@ export default function Terminal({
    * iOS 的软键盘没有 Esc，没有这条路手机用户会被困在插入模式里出不来
    */
   function sendVim(key: string) {
-    if (!vim) return;
-    const next = vimKey(vim, key);
+    if (!vim || !vimMod.current) return;
+    const next = vimMod.current!.vimKey(vim, key);
     // 退出什么都不留：备用屏幕的语义就是"原样恢复"，真 vim 退出后
     // 屏幕上看不到刚才编辑的内容
     if (next === null) setVim(null);
@@ -354,8 +380,8 @@ export default function Terminal({
   }
 
   function sendHtop(key: string) {
-    if (!htop) return;
-    const action = htopKey(htop, key, procSnapshot());
+    if (!htop || !htopMod.current) return;
+    const action = htopMod.current!.htopKey(htop, key, procSnapshot());
     if (action.kind === "quit") setHtop(null);
     else if (action.kind === "kill") killProc(action.pid);
     else setHtop(action.state);
@@ -775,16 +801,22 @@ export default function Terminal({
       >
         {lines}
       </div>
-      {htop && snap && (
+      {htop && snap && htopMod.current && (
         <HtopScreen
-          procs={snap.procs}
-          machine={snap.machine}
-          lagPercent={snap.lag}
-          state={htop}
-          user={ME.user}
+          {...htopMod.current.htopView({
+            procs: snap.procs,
+            machine: snap.machine,
+            lagPercent: snap.lag,
+            state: htop,
+            now: snap.machine.uptimeMs,
+            user: ME.user,
+            rows: viewportRows(),
+          })}
         />
       )}
-      {vim && <VimScreen vim={vim} hint={composeHint} />}
+      {vim && vimMod.current && (
+        <VimScreen {...vimMod.current.vimView(vim)} hint={composeHint} />
+      )}
       {(vim || pager) && (
         <ModeKeys
           keys={vim ? VIM_KEYS : PAGER_KEYS}
@@ -817,7 +849,7 @@ export default function Terminal({
             if (vim?.mode === "insert") {
               if (composing.current) return; // 合成中的中间态不插
               if (e.target.value) {
-                setVim(insertText(vim, e.target.value));
+                setVim(vimMod.current!.insertText(vim, e.target.value));
                 edit("");
               }
               return;
@@ -843,7 +875,7 @@ export default function Terminal({
             setComposeHint("");
             // 合成完的整串一次插进去，中间态不进缓冲区
             if (vim?.mode === "insert") {
-              if (e.data) setVim(insertText(vim, e.data));
+              if (e.data) setVim(vimMod.current!.insertText(vim, e.data));
               edit("");
             }
           }}

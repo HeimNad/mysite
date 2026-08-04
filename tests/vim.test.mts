@@ -135,9 +135,16 @@ test("文件末尾之后用 ~ 填，和真 vim 一样", () => {
   assert.equal(vimView(open()).body.filter((l) => l === "~").length, 6, "3 行内容 + 6 个 ~ = 9");
 });
 
+test("没装的时候 vim 不存在，装了才有", async () => {
+  const bare = await execute("vim a.txt", ctxOf(ROOT, at()));
+  assert.match(bare.error!, /Command 'vim' not found/);
+  assert.match(bare.error!, /sudo apt install vim/);
+});
+
 test("vim 命令把内容交给 ctx.edit，不自己打印", async () => {
   const edited: { text: string; name: string }[] = [];
-  const ctx = ctxOf(ROOT, at(), [], "zh", new Map(), undefined, [], [], undefined, [], edited);
+  // vim 是 apt 装的，没装的时候命令根本不存在
+  const ctx = ctxOf(ROOT, at(), [], "zh", new Map([["vim", "9.1"]]), undefined, [], [], undefined, [], edited);
 
   const r = await execute("vim a.txt", ctx);
   assert.equal(r.error, undefined, `意外报错: ${r.error}`);

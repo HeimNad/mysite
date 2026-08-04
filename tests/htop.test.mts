@@ -96,9 +96,16 @@ test("Safari 上内存条是 null，不是 0", () => {
   assert.doesNotMatch(text, /0B\/0B/);
 });
 
+test("没装的时候 htop 不存在，装了才有", async () => {
+  const bare = await execute("htop", ctxOf(ROOT, at()));
+  assert.match(bare.error!, /Command 'htop' not found/);
+  assert.match(bare.error!, /sudo apt install htop/);
+});
+
 test("htop 命令走 ctx.monitor，不产生行输出", async () => {
   const monitored: boolean[] = [];
-  const ctx = ctxOf(ROOT, at(), [], "zh", new Map(), undefined, [], [], undefined, [], [], monitored);
+  // htop 是 apt 装的，没装的时候命令根本不存在
+  const ctx = ctxOf(ROOT, at(), [], "zh", new Map([["htop", "3.3"]]), undefined, [], [], undefined, [], [], monitored);
   const r = await execute("htop", ctx);
   assert.equal(r.error, undefined, `意外报错: ${r.error}`);
   assert.equal(r.output, undefined, "htop 接管屏幕");

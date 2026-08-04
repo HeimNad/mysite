@@ -3,8 +3,6 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { donutFrame } from "@/lib/terminal/donut";
 import type { Visual } from "@/lib/terminal/commands";
-import { vimView, type Vim } from "@/lib/terminal/vim";
-import { htopView, type HtopInput } from "@/lib/terminal/htop";
 import avatarAscii from "@/components/avatar-ascii.json";
 
 /**
@@ -181,15 +179,27 @@ export function Donut({ procs }: { procs: ProcTable }) {
 
 /**
  * vim 的屏幕。光标是真的画出来的方块 —— 它标的是缓冲区里的位置，
- * 不是一个装饰性的闪烁条：h/j/k/l 走到哪它就在哪
+ * 不是一个装饰性的闪烁条：h/j/k/l 走到哪它就在哪。
+ *
+ * 只收算好的数据，不 import vim.ts —— 那个模块是 apt 装进来的，
+ * 静态引用会把它拽回主包，"下载"就成了演戏
  */
-export function VimScreen({ vim, hint }: { vim: Vim; hint: string }) {
-  const { body, status, cursor } = vimView(vim);
+export function VimScreen({
+  body,
+  status,
+  cursor,
+  hint,
+}: {
+  body: string[];
+  status: string;
+  cursor: { row: number; col: number };
+  hint: string;
+}) {
   return (
     <div className="vim">
       <pre>
         {body.map((text, i) => {
-          if (i !== cursor.row) return <div key={i}>{text || " "}</div>;
+          if (i !== cursor.row) return <div key={i}>{text || " "}</div>;
           // 光标那一行拆成三段，中间那个字符反色
           const at = text[cursor.col] ?? " ";
           return (
@@ -243,20 +253,21 @@ export function ModeKeys({
   );
 }
 
-/**
- * htop 的屏幕。所有数字都由 lib/terminal/htop.ts 算好 ——
- * 这里只负责把选中行反色，以及把功能键画成底部那一条
- */
-export function HtopScreen(props: Omit<HtopInput, "now" | "rows"> & { rows?: number }) {
-  const { header, rows, selected, fkeys } = htopView({
-    ...props,
-    now: props.machine.uptimeMs,
-    rows: props.rows ?? 24,
-  });
+/** htop 的屏幕。数字全由 htop.ts 算好 —— 同样不静态引用那个模块 */
+export function HtopScreen({
+  header,
+  rows,
+  selected,
+  fkeys,
+}: {
+  header: string[];
+  rows: string[];
+  selected: number;
+  fkeys: string[];
+}) {
   return (
     <div className="htop">
       <pre>
-        {/* 每行一个 div，块级本身就换行 —— 别再加 \n，会多出一空行 */}
         {header.map((line, i) => (
           <div key={`h${i}`}>{line || " "}</div>
         ))}

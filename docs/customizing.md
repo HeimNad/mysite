@@ -132,12 +132,28 @@ ll: "ls -l",
 
 ### 加一个可以 apt install 的包
 
-有些命令要带一大坨数据（figlet 的字体 30 kB，比整个命令层还大）。这种东西不该
-进首屏，于是它们变成"包"：装了才存在。
+**分包的标准是「真 Ubuntu 装不装」，不是大小。** coreutils（`sort`/`cut`/`tr`/
+`uniq`）和 `less` 每台机器都有，做成包反而不像真的；`vim` 和 `htop` 恰恰是装完
+系统第一批要敲 `apt install` 的东西。
 
-1. 把数据文件放进 `public/apt/pool/universe/<首字母>/<包名>/`
-2. 在 `lib/terminal/packages.ts` 的 `PACKAGES` 里登记 `path` `version` `desc`
+两种包：
+
+**数据包**（figlet 的字体）—— 载荷是一个真实文件：
+
+1. 文件放进 `public/apt/pool/universe/<首字母>/<包名>/`
+2. `lib/terminal/packages.ts` 里登记 `path` `version` `desc`
 3. 给命令加 `pkg: "包名"`
+
+**程序包**（vim、htop）—— 载荷是打包器切出来的 chunk：
+
+1. `PACKAGES` 里登记，**不写 `path`**
+2. `terminal.tsx` 的 `installPkg` 里加一行 `await import(...)`
+3. 模块**只能动态 import**。任何地方留一个静态 `import` 都会把它拽回主包，
+   "下载"就成了演戏 —— 类型用 `import type`，屏幕组件只收算好的数据
+
+字节数从 Resource Timing 的 `encodedBodySize` 读，也就是浏览器实际收到的量；
+`Get:1` 显示的是真实 chunk 地址（`/_next/static/chunks/...`）。地址不好看，
+但那确实是这台机器取程序的地方 —— 在 `/apt/` 下摆一个好看的假路径是撒谎。
 
 然后：没装的时候 `help`、Tab 补全和命令查找里都没有它，敲了会得到 Ubuntu 那句
 `Command 'x' not found, but can be installed with: sudo apt install x`；装了就全都有。

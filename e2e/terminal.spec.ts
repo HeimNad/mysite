@@ -16,6 +16,12 @@ async function boot(page: import("@playwright/test").Page) {
   return t;
 }
 
+/** vim 和 htop 是 apt 装的（真 Ubuntu 也不默认装），用之前得先装上 */
+async function install(page: import("@playwright/test").Page, name: string) {
+  await run(page, `sudo apt install ${name}`);
+  await expect(page.getByRole("log")).toContainText(`Setting up ${name}`);
+}
+
 async function run(page: import("@playwright/test").Page, cmd: string) {
   const { input } = term(page);
   await input.fill(cmd);
@@ -289,6 +295,7 @@ test.describe("htop", () => {
 
   test("htop 是活的：进程真的出现，F9 真的杀掉", async ({ page }) => {
     const { log } = await boot(page);
+    await install(page, "htop");
     await run(page, "donut"); // 先跑一个，进程表里才有东西可杀
 
     await run(page, "htop");
@@ -319,6 +326,7 @@ test.describe("htop", () => {
 
   test("量不到的列一个都不显示，不拿 0 冒充", async ({ page }) => {
     await boot(page);
+    await install(page, "htop");
     await run(page, "htop");
     const screen = page.locator(".htop pre");
     await expect(screen).toBeVisible();
@@ -340,6 +348,9 @@ test.describe("vim", () => {
       await page.goto("/");
       const input = page.getByRole("textbox");
       await expect(page.getByRole("log")).toContainText("欢迎来到");
+      await input.fill("sudo apt install vim");
+      await input.press("Enter");
+      await expect(page.getByRole("log")).toContainText("Setting up vim");
       await input.fill("vim skills.txt");
       await input.press("Enter");
 
@@ -365,6 +376,7 @@ test.describe("vim", () => {
 
   test("vim 是整屏接管：看不到历史，退出后原样恢复", async ({ page }) => {
     const { log } = await boot(page);
+    await install(page, "vim");
     await run(page, "neofetch");
     await expect(log).toContainText("GitHub:");
 
@@ -390,6 +402,7 @@ test.describe("vim", () => {
 
   test("vim 真能编辑，但保存不了 —— 文件系统是只读的", async ({ page }) => {
     const { log, input } = await boot(page);
+    await install(page, "vim");
     const status = page.locator(".vim-status");
 
     await run(page, "vim skills.txt");
@@ -433,6 +446,7 @@ test.describe("vim", () => {
 
   test("插入模式能打中文 —— 输入法合成完整串进缓冲区", async ({ page }) => {
     await boot(page);
+    await install(page, "vim");
     await run(page, "vim skills.txt");
     await expect(page.locator(".vim-status")).toBeVisible();
 
@@ -696,6 +710,35 @@ test("sudo apt install figlet：真下载、真出现、刷新还在", async ({ 
   await expect(term(page).log).toContainText("欢迎来到");
   await run(page, "figlet ok");
   await expect(term(page).log).toContainText("|_|");
+});
+
+test("装程序包真的会下载一个 chunk，字节数是量出来的", async ({ page }) => {
+  const chunks: string[] = [];
+  page.on("response", (r) => {
+    if (r.url().includes("/_next/static/chunks/")) chunks.push(r.url());
+  });
+  const { log } = await boot(page);
+
+  await run(page, "htop");
+  await expect(log).toContainText("Command 'htop' not found");
+  chunks.length = 0; // 开场加载的不算
+
+  await run(page, "sudo apt install htop");
+  await expect(log).toContainText("Setting up htop");
+  // 关键：真的多下载了一个 chunk，代码不在主包里
+  expect(chunks.length, "装的时候该去取那个 chunk").toBeGreaterThan(0);
+
+  // Get: 行报的是真地址和真字节数 —— 不是包表里写死的常数
+  const text = await log.innerText();
+  const line = text.split("\n").find((l) => l.startsWith("Get:1"))!;
+  expect(line).toContain("/_next/static/chunks/");
+  const shown = /\[(\d+(?:\.\d+)?) (B|kB)\]/.exec(line);
+  expect(shown, `Get: 行没有字节数: ${line}`).toBeTruthy();
+  expect(Number(shown![1])).toBeGreaterThan(0);
+
+  await run(page, "htop");
+  await expect(page.locator(".htop")).toBeVisible();
+  await page.keyboard.press("q");
 });
 
 test("apt 输出里那个下载地址真能打开", async ({ page }) => {
