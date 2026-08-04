@@ -22,7 +22,7 @@ async function boot(page: import("@playwright/test").Page) {
 /** vim 和 htop 是 apt 装的（真 Ubuntu 也不默认装），用之前得先装上 */
 async function install(page: import("@playwright/test").Page, name: string) {
   await run(page, `sudo apt install ${name}`);
-  await expect(page.getByRole("log")).toContainText(`Setting up ${name}`);
+  await expect(page.getByRole("log")).toContainText(`正在设置 ${name}`);
 }
 
 async function run(page: import("@playwright/test").Page, cmd: string) {
@@ -393,7 +393,7 @@ test.describe("vim", () => {
       await expect(page.getByRole("log")).toContainText("欢迎来到");
       await input.fill("sudo apt install vim");
       await input.press("Enter");
-      await expect(page.getByRole("log")).toContainText("Setting up vim");
+      await expect(page.getByRole("log")).toContainText("正在设置 vim");
       await input.fill("vim skills.txt");
       await input.press("Enter");
 
@@ -730,13 +730,13 @@ test("sudo apt install figlet：真下载、真出现、刷新还在", async ({ 
   await expect(log).toContainText("Command 'figlet' not found");
   await expect(log).toContainText("sudo apt install figlet");
 
-  // 不加 sudo 拿不到 dpkg 的锁
+  // 不加 sudo 拿不到 dpkg 的锁。站点是中文的，apt 也就说中文 —— 真 apt 一样
   await run(page, "apt install figlet");
-  await expect(log).toContainText("are you root?");
+  await expect(log).toContainText("请查看您是否正以 root 用户运行");
 
   await run(page, "sudo apt install figlet");
-  await expect(log).toContainText("Setting up figlet (2.2.5-3)");
-  // Get: 那一行必须是真地址，而且字节数要和文件真实大小一致（30740 → 30.7 kB）
+  await expect(log).toContainText("正在设置 figlet (2.2.5-3)");
+  // 获取: 那一行必须是真地址，而且字节数要和文件真实大小一致（30740 → 30.7 kB）
   await expect(log).toContainText("/apt/pool/universe/f/figlet/figlet_2.2.5-3.flf");
   await expect(log).toContainText("30.7 kB");
 
@@ -755,6 +755,41 @@ test("sudo apt install figlet：真下载、真出现、刷新还在", async ({ 
   await expect(term(page).log).toContainText("|_|");
 });
 
+test("apt remove 真的卸掉，刷新之后也还是没有", async ({ page }) => {
+  const { log, input } = await boot(page);
+  await run(page, "sudo apt install figlet");
+  await expect(log).toContainText("正在设置 figlet");
+
+  await run(page, "sudo apt remove figlet");
+  await expect(log).toContainText("正在卸载 figlet (2.2.5-3)");
+
+  // 命令真的又没了 —— 不是只打印一句卸载成功
+  await run(page, "figlet hi");
+  await expect(log).toContainText("Command 'figlet' not found");
+
+  // Tab 也补不出来了：补全和命令查找走的是同一份已装列表
+  await input.fill("figl");
+  await input.press("Tab");
+  await expect(input).toHaveValue("figl");
+
+  // 刷新之后 dpkg 的记录里也没有了
+  await page.reload();
+  await expect(term(page).log).toContainText("欢迎来到");
+  await run(page, "figlet ok");
+  await expect(term(page).log).toContainText("Command 'figlet' not found");
+});
+
+test("切到英文，apt 就说英文 —— 同一条命令两套 gettext 译文", async ({ page }) => {
+  const { log } = await boot(page);
+  await run(page, "lang en");
+  await run(page, "sudo apt install figlet");
+  await expect(log).toContainText("Setting up figlet (2.2.5-3)");
+  await expect(log).toContainText("The following NEW packages will be installed:");
+
+  await run(page, "sudo apt uninstall figlet");
+  await expect(log).toContainText("E: Invalid operation uninstall");
+});
+
 test("装程序包是从 /apt/ 真取一次，不是从打包器的 chunk", async ({ page }) => {
   const fromApt: string[] = [];
   const fromChunks: string[] = [];
@@ -770,7 +805,7 @@ test("装程序包是从 /apt/ 真取一次，不是从打包器的 chunk", asyn
   fromChunks.length = 0;
 
   await run(page, "sudo apt install htop");
-  await expect(log).toContainText("Setting up htop");
+  await expect(log).toContainText("正在设置 htop");
 
   // 恰好取一次：既 fetch 又 import 的话同样的字节会下两遍
   expect(fromApt.length, `应该只从 /apt/ 取一次，实际 ${fromApt.length} 次`).toBe(1);
@@ -778,8 +813,8 @@ test("装程序包是从 /apt/ 真取一次，不是从打包器的 chunk", asyn
   // 程序不在打包器的产物里 —— 在的话这个"下载"就是演戏
   expect(fromChunks.length, "装包不该顺带拉 chunk").toBe(0);
 
-  // Get: 行报的就是刚才取的那个地址
-  const line = (await log.innerText()).split("\n").find((l) => l.startsWith("Get:1"))!;
+  // 获取: 行报的就是刚才取的那个地址（站点是中文的，apt 说中文）
+  const line = (await log.innerText()).split("\n").find((l) => l.startsWith("获取:1"))!;
   expect(line).toContain("/apt/pool/universe/h/htop/htop_3.3.0.js");
   expect(line, "字节数得是量出来的").toMatch(/\[\d+(\.\d+)? (B|kB)\]/);
 

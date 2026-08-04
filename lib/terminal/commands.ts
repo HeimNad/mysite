@@ -72,6 +72,8 @@ export type Ctx = {
   pkgs: Map<string, string>;
   /** 真去下载一个包，返回真实的字节数和耗时 —— apt 的输出不编数字 */
   install: (name: string) => Promise<{ bytes: number; ms: number }>;
+  /** 真的卸掉：命令从 help 和补全里消失，刷新之后也还是没有 */
+  uninstall: (name: string) => void;
   /** 只有 sudo 转交过来的时候才是 true */
   asRoot: boolean;
   /** 这台机器上真在跑的东西 —— 动画的定时器，不是编的列表 */
@@ -1058,80 +1060,136 @@ export const COMMANDS: Record<string, Cmd> = {
 
   apt: {
     desc: { zh: "包管理器", en: "package manager" },
-    usage: { zh: "apt <list|install> [包名]", en: "apt <list|install> [package]" },
+    usage: {
+      zh: "apt <list|install|remove|purge> [包名]",
+      en: "apt <list|install|remove|purge> [package]",
+    },
     man: {
       zh:
         "装东西要 root，所以是 sudo apt install <包>。\n" +
-        "装的是真东西：Get: 那一行的地址浏览器能打开，curl 也取得到，\n" +
+        "装的是真东西：获取: 那一行的地址浏览器能打开，curl 也取得到，\n" +
         "字节数就是那个文件的大小。程序包本身就是一个 ES 模块，装它 = 取它。\n" +
-        "装完命令才会出现在 help 和 Tab 补全里。",
+        "装完命令才会出现在 help 和 Tab 补全里，remove 之后它们真的又消失。\n" +
+        "输出跟着站点语言走 —— 真 apt 也是 gettext 本地化的，译文取自 Debian 的 zh_CN.po。\n" +
+        "没有 uninstall 这个子命令，真 apt 也没有。",
       en:
         "Installing needs root, so it is sudo apt install <package>.\n" +
         "The download is real: the Get: address opens in a browser, curl reaches it,\n" +
         "and the byte count is that file's size. A program package IS an ES module,\n" +
         "so installing it and fetching it are the same act.\n" +
-        "A package's commands appear in help and Tab completion only once it is installed.",
+        "A package's commands appear in help and Tab completion only once it is\n" +
+        "installed, and genuinely disappear again after remove.\n" +
+        "Output follows the site language: real apt is gettext-localized too.",
     },
     async run(args, _stdin, ctx) {
       const [sub, name] = args.filter((a) => !a.startsWith("-"));
+      const { t } = ctx;
 
       if (sub === "list") {
         return [
-          "Listing... Done",
+          t("正在列表... 完成", "Listing... Done"),
           ...Object.entries(PACKAGES).map(
             ([n, p]) =>
               `${n}/stable ${p.version} all` +
-              (ctx.pkgs.has(n) ? " [installed]" : "") +
+              (ctx.pkgs.has(n) ? t(" [已安装]", " [installed]") : "") +
               `\n  ${pick(p.desc, ctx.lang)}`
           ),
         ].join("\n");
       }
 
-      if (sub !== "install")
+      // 真 apt 对不认识的子命令就这一行 —— 所以 apt uninstall 会得到
+      // "无效的操作 uninstall"，因为 uninstall 本来就不是 apt 的词
+      const removing = sub === "remove" || sub === "purge";
+      if (sub !== "install" && !removing)
+        throw new Error(t(`E: 无效的操作 ${sub ?? ""}`, `E: Invalid operation ${sub ?? ""}`));
+
+      if (!name)
         throw new Error(
-          ctx.t(
-            "apt: 用法: apt <list|install> [包名]",
-            "apt: usage: apt <list|install> [package]"
+          t(
+            `E: 必须为 ${sub} 命令明确给出至少一个软件包`,
+            `E: Must specify at least one package to ${sub}`
           )
         );
-
-      if (!name) throw new Error("E: You must give at least one package name");
-      if (!Object.hasOwn(PACKAGES, name)) throw new Error(`E: Unable to locate package ${name}`);
+      if (!Object.hasOwn(PACKAGES, name))
+        throw new Error(t(`E: 无法定位软件包 ${name}`, `E: Unable to locate package ${name}`));
 
       // 真 apt 拿不到 dpkg 锁就是这两行。它同时也在教你下次加 sudo
       if (!ctx.asRoot)
         throw new Error(
-          "E: Could not open lock file /var/lib/dpkg/lock-frontend - open (13: Permission denied)\n" +
-            "E: Unable to acquire the dpkg frontend lock (/var/lib/dpkg/lock-frontend), are you root?"
+          t(
+            "E: 无法打开锁文件 /var/lib/dpkg/lock-frontend - open (13: 权限不够)\n" +
+              "E: 无法获取 dpkg 前端锁 (/var/lib/dpkg/lock-frontend)，请查看您是否正以 root 用户运行？",
+            "E: Could not open lock file /var/lib/dpkg/lock-frontend - open (13: Permission denied)\n" +
+              "E: Unable to acquire the dpkg frontend lock (/var/lib/dpkg/lock-frontend), are you root?"
+          )
         );
 
       const pkg = PACKAGES[name];
+      const head = [
+        t("正在读取软件包列表... 完成", "Reading package lists... Done"),
+        t("正在分析软件包的依赖关系树... 完成", "Building dependency tree... Done"),
+        t("正在读取状态信息... 完成", "Reading state information... Done"),
+      ];
+      /** apt 的统计行由两个片段拼出来，照它的拼法来 */
+      const tally = (add: number, del: number) =>
+        t(
+          `升级了 0 个软件包，新安装了 ${add} 个软件包，要卸载 ${del} 个软件包，有 0 个软件包未被升级。`,
+          `0 upgraded, ${add} newly installed, ${del} to remove and 0 not upgraded.`
+        );
+
+      if (removing) {
+        if (!ctx.pkgs.has(name))
+          return [
+            ...head,
+            t(`软件包 ${name} 未安装，所以不会被卸载`, `Package '${name}' is not installed, so not removed`),
+            tally(0, 0),
+          ].join("\n");
+
+        ctx.uninstall(name);
+        return [
+          ...head,
+          t("下列软件包将被【卸载】：", "The following packages will be REMOVED:"),
+          `  ${name}`,
+          tally(0, 1),
+          t(
+            `解压缩后将会空出 ${aptSize(pkg.installedSize)} 的空间。`,
+            `After this operation, ${aptSize(pkg.installedSize)} disk space will be freed.`
+          ),
+          t(`正在卸载 ${name} (${pkg.version}) ...`, `Removing ${name} (${pkg.version}) ...`),
+        ].join("\n");
+      }
+
       if (ctx.pkgs.has(name))
         return [
-          `${name} is already the newest version (${pkg.version}).`,
-          "0 upgraded, 0 newly installed, 0 to remove and 0 not upgraded.",
+          t(`${name} 已经是最新版 (${pkg.version})。`, `${name} is already the newest version (${pkg.version}).`),
+          tally(0, 0),
         ].join("\n");
 
       const { bytes, ms } = await ctx.install(name);
       // 速率是真算的：0 毫秒时按 1 毫秒算，免得除出 Infinity
       const rate = Math.round(bytes / Math.max(ms, 1));
       const file = pkg.path.split("/").pop();
+      const size = aptSize(bytes);
 
       return [
-        "Reading package lists... Done",
-        "Building dependency tree... Done",
-        "Reading state information... Done",
-        "The following NEW packages will be installed:",
+        ...head,
+        t("下列【新】软件包将被安装：", "The following NEW packages will be installed:"),
         `  ${name}`,
-        "0 upgraded, 1 newly installed, 0 to remove and 0 not upgraded.",
-        `Need to get ${aptSize(bytes)} of archives.`,
-        `After this operation, ${aptSize(pkg.installedSize)} of additional disk space will be used.`,
-        `Get:1 ${SITE_URL}${pkg.path} ${name} all ${pkg.version} [${aptSize(bytes)}]`,
-        `Fetched ${aptSize(bytes)} in ${(ms / 1000).toFixed(0)}s (${rate.toLocaleString("en-US")} kB/s)`,
-        `Selecting previously unselected package ${name}.`,
-        `Preparing to unpack .../${file} ...`,
-        `Unpacking ${name} (${pkg.version}) ...`,
-        `Setting up ${name} (${pkg.version}) ...`,
+        tally(1, 0),
+        t(`需要下载 ${size} 的归档。`, `Need to get ${size} of archives.`),
+        t(
+          `解压缩后会消耗 ${aptSize(pkg.installedSize)} 的额外空间。`,
+          `After this operation, ${aptSize(pkg.installedSize)} of additional disk space will be used.`
+        ),
+        `${t("获取", "Get")}:1 ${SITE_URL}${pkg.path} ${name} all ${pkg.version} [${size}]`,
+        t(
+          `已下载 ${size}，耗时 ${(ms / 1000).toFixed(0)}秒 (${rate.toLocaleString("en-US")} kB/s)`,
+          `Fetched ${size} in ${(ms / 1000).toFixed(0)}s (${rate.toLocaleString("en-US")} kB/s)`
+        ),
+        t(`正在选中未选择的软件包 ${name}。`, `Selecting previously unselected package ${name}.`),
+        t(`准备解压 .../${file}  ...`, `Preparing to unpack .../${file} ...`),
+        t(`正在解压 ${name} (${pkg.version}) ...`, `Unpacking ${name} (${pkg.version}) ...`),
+        t(`正在设置 ${name} (${pkg.version}) ...`, `Setting up ${name} (${pkg.version}) ...`),
       ].join("\n");
     },
   },

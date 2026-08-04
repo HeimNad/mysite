@@ -232,6 +232,26 @@ export default function Terminal({
     return Math.max(5, Math.floor(window.innerHeight / lineHeight) - 2);
   }
 
+  /**
+   * 真的卸掉。程序模块已经在浏览器的模块缓存里，那个是收不回来的 ——
+   * 但把引用丢掉，命令就真的又不能用了，也真的从 help 和补全里消失，
+   * 而且刷新之后还是没有。再装一次会重新走 import，只是这回浏览器从缓存给
+   */
+  function uninstallPkg(name: string): void {
+    if (name === "vim") vimMod.current = null;
+    if (name === "htop") htopMod.current = null;
+    setPkgs((prev) => {
+      const next = new Map(prev);
+      next.delete(name);
+      return next;
+    });
+    try {
+      localStorage.setItem(PKGS_KEY, JSON.stringify(installed().filter((p) => p !== name)));
+    } catch {
+      // 隐私模式下本来就没记住，这次会话里已经卸掉了
+    }
+  }
+
   /** 上次装过哪些包 */
   function installed(): string[] {
     try {
@@ -345,6 +365,7 @@ export default function Terminal({
       stats,
       pkgs,
       install: installPkg,
+      uninstall: uninstallPkg,
       asRoot: false,
       procs: procSnapshot(),
       kill: killProc,

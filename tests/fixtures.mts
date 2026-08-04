@@ -98,6 +98,9 @@ export function ctxOf(
       pkgs.set(name, body);
       return { bytes: body.length, ms: 1 };
     },
+    uninstall: (name) => {
+      pkgs.delete(name);
+    },
     root: toStatTree(full),
     stats: toStatMap(full, {}, FIXED_TIME),
     cwd,

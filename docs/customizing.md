@@ -165,6 +165,27 @@ ll: "ls -l",
   就是 `process is not defined` —— 所以 `human()` 挪去了 `text.ts`。
 - **不能又 fetch 又 import**。那是同样的字节下载两遍，第二遍纯粹为了让日志好看。
 
+程序包还要在 `terminal.tsx` 的 `uninstallPkg` 里加一行把模块引用置空。模块本身
+已经进了浏览器的模块缓存，那个收不回来 —— 但引用一丢，命令就真的又不能用了。
+
+### apt 的输出为什么是中文的
+
+真 apt 是 gettext 本地化的，`LANG=zh_CN.UTF-8` 下整套输出都是中文，所以这里的
+apt 跟着站点语言走。**每一句译文都是从 Debian 官方 po 文件里逐字查出来的**，
+不是我们自己翻的：
+
+- apt 的：`salsa.debian.org/apt-team/apt` → `po/zh_CN.po`
+- dpkg 的（`正在解压` / `正在设置` / `正在卸载`）：`salsa.debian.org/dpkg-team/dpkg` → `po/zh_CN.po`
+
+加新句子时照这个来源查，别顺手意译 —— `下列【新】软件包将被安装：` 那对方头括号
+和 `准备解压 %s  ...` 里的两个空格都是 po 文件里就有的。
+
+### 卸载子命令叫 remove，不叫 uninstall
+
+真 apt 没有 `uninstall`，敲了只会得到 `E: 无效的操作 uninstall`。这里照抄了这个
+行为，所以 `apt uninstall vim` 会失败 —— 和 dpkg 锁那两行一样，报错本身在教
+下一步该敲什么。
+
 这三条都有测试盯着（`tests/apt.test.mts`），包和源码对不上也会红。
 
 为什么不用打包器自己切的 chunk：那地址是 `/_next/static/chunks/<哈希>.js`，
