@@ -32,7 +32,7 @@ jobs:
       # key 用 package-lock 的哈希 —— Playwright 版本变了才需要重下
       - name: Cache Playwright browsers
         id: pw-cache
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
