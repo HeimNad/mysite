@@ -26,7 +26,23 @@ jobs:
       # webkit 是 Safari／iOS 的引擎。有一条用例专门跑它：deviceMemory 和
       # performance.memory 只有 Chromium 系报，"拿不到就写 null"这条只有在
       # 真正拿不到的引擎上才验得了
+      #
+      # 浏览器缓存起来：不缓存的话每次都要下 200 MB 上下，实测能占掉整个
+      # 流程一大半时间，而且波动很大（1 分半到 4 分半都见过）。
+      # key 用 package-lock 的哈希 —— Playwright 版本变了才需要重下
+      - name: Cache Playwright browsers
+        id: pw-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+
+      # 命中缓存时只装系统依赖，跳过浏览器本身的下载
+      - run: npx playwright install-deps chromium webkit
+        if: steps.pw-cache.outputs.cache-hit == 'true'
       - run: npx playwright install --with-deps chromium webkit
+        if: steps.pw-cache.outputs.cache-hit != 'true'
+
       - run: npm run e2e
 
       - uses: actions/upload-artifact@v5
