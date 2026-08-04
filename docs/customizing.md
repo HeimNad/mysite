@@ -174,8 +174,8 @@ ll: "ls -l",
 apt 跟着站点语言走。**每一句译文都是从 Debian 官方 po 文件里逐字查出来的**，
 不是我们自己翻的：
 
-- apt 的：`salsa.debian.org/apt-team/apt` → `po/zh_CN.po`
-- dpkg 的（`正在解压` / `正在设置` / `正在卸载`）：`salsa.debian.org/dpkg-team/dpkg` → `po/zh_CN.po`
+- apt 的：<https://salsa.debian.org/apt-team/apt/-/raw/main/po/zh_CN.po>
+- dpkg 的（`正在解压` / `正在设置` / `正在卸载`）：<https://salsa.debian.org/dpkg-team/dpkg/-/raw/main/po/zh_CN.po>
 
 加新句子时照这个来源查，别顺手意译 —— `下列【新】软件包将被安装：` 那对方头括号
 和 `准备解压 %s  ...` 里的两个空格都是 po 文件里就有的。
