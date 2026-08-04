@@ -353,6 +353,24 @@ export default function Terminal({
       machine,
       page: (text, name) => setPager(openPager(text, name, viewportRows())),
       edit: (text, name) => setVim(vimMod.current!.openVim(text, name, viewportRows())),
+      // 真的写剪贴板。浏览器可能拒绝（页面没聚焦、非用户手势），拒了就照实说
+      clipboard: async (text) => {
+        try {
+          await navigator.clipboard.writeText(text);
+        } catch {
+          throw new Error(
+            lang === "zh"
+              ? "pbcopy: 浏览器拒绝了写剪贴板 —— 页面得在前台，而且要由你主动触发"
+              : "pbcopy: the browser refused clipboard access — the page must be focused and the action yours"
+          );
+        }
+      },
+      // 真发一次请求，量前后差。cache: no-store 免得第二次直接命中缓存变成 0ms
+      probe: async (path) => {
+        const t0 = performance.now();
+        await fetch(path, { cache: "no-store" });
+        return performance.now() - t0;
+      },
       monitor: () => {
         setSnap(null); // 清掉上一次的，别让旧进程表闪一下
         setHtop({ selected: 0 });

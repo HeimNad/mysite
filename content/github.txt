@@ -2,17 +2,18 @@ HeimNad
 Let go of things you can't change.
 SkyWorldStudio · United States · https://heimnad.com
 
-6 public repos · 5 followers · joined 2022-06-18
+7 public repos · 5 followers · joined 2022-06-18
 
 NAME              STARS  LANG        PUSHED
+mysite                0  TypeScript  2026-08-04
+    终端风格的个人网站：管道、cd、Tab 补全、man page... / A terminal-styled personal site where the shell actually works
+formatlens            0  Rust        2026-08-04
 HeimNad               0  —           2026-08-03
     Config files for my GitHub profile.
-mysite                0  TypeScript  2026-08-03
-    终端风格的个人网站：管道、cd、Tab 补全、man page... / A terminal-styled personal site where the shell actually works
 TheMNHWebsite         0  TypeScript  2026-07-31
 Spigot_Autobuild      3  —           2023-01-18
 
 （另有 2 个 fork 没列出来 / 2 forks not listed）
 
-抓取于 2026-08-03 · 数据来自 GitHub API，重新构建才会更新
-Fetched 2026-08-03 · from the GitHub API; only a rebuild refreshes it
+抓取于 2026-08-04 · 数据来自 GitHub API，重新构建才会更新
+Fetched 2026-08-04 · from the GitHub API; only a rebuild refreshes it

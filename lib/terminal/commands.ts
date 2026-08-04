@@ -10,6 +10,7 @@ import { INIT_PID, psTable, type Proc } from "./procs.ts";
 import { dfTable, freeTable, unameLine, type Machine } from "./procfs.ts";
 import { formatWeather, parseWttr } from "./weather.ts";
 import { cutLine, sortLines, trText, uniqLines } from "./textutils.ts";
+import gitlog from "../site/gitlog.json" with { type: "json" };
 import { SITE_URL } from "../site/me.ts";
 import {
   entries,
@@ -83,6 +84,10 @@ export type Ctx = {
   panic: (message: string) => void;
   /** 访客自己机器的真实参数。拿不到的字段是 null，不是编的默认值 */
   machine: () => Promise<Machine>;
+  /** 写进访客的剪贴板。真的写，不是显示"已复制" */
+  clipboard: (text: string) => Promise<void>;
+  /** 对本站发一次请求，返回真实往返毫秒数 */
+  probe: (path: string) => Promise<number>;
   /** 把文本交给分页器。键盘从此归 less，直到用户按 q */
   page: (text: string, name: string) => void;
   /** 把文本交给编辑器。键盘从此归 vim，直到 :q */
@@ -907,6 +912,99 @@ export const COMMANDS: Record<string, Cmd> = {
         "which is the only kind of busy that is measurable here.",
     },
     run: (_a, _s, ctx) => ctx.monitor(),
+  },
+
+  git: {
+    desc: { zh: "看这个站自己的提交历史", en: "this site's own commit history" },
+    usage: { zh: "git log [-n 条数]", en: "git log [-n count]" },
+    man: {
+      zh:
+        "只有 log 一个子命令 —— 这里没有工作区，别的子命令没有意义。\n" +
+        "列的是你正在看的这个站真实的提交，从 GitHub API 取的。\n" +
+        "数据停在 npm run github 那一刻，不会自己更新，所以末尾写了抓取日期。",
+      en:
+        "log is the only subcommand — there is no working tree here, so the rest\n" +
+        "would be meaningless. The commits are the real history of the site you are\n" +
+        "looking at, from the GitHub API. It is frozen at the moment npm run github\n" +
+        "ran, which is why the fetch date is printed at the end.",
+    },
+    run(args, _stdin, ctx) {
+      if (args[0] !== "log")
+        throw new Error(
+          ctx.t(`git: '${args[0] ?? ""}' 不是这里支持的命令，只有 log`, `git: '${args[0] ?? ""}' is not a command here; only log`)
+        );
+      const { n } = takeNum(args.slice(1), 10);
+      const shown = gitlog.commits.slice(0, Math.max(1, n));
+      // 作者列按最长的那个撑开 —— 写死宽度会被 dependabot[bot] 顶爆
+      const w = Math.max(...shown.map((c) => displayWidth(c.author))) + 2;
+      const rows = shown.map(
+        (c) => `${c.sha}  ${c.date}  ${padCols(c.author, w)}${c.subject}`
+      );
+      return [
+        ...rows,
+        "",
+        ctx.t(
+          `抓取于 ${gitlog.fetchedAt.slice(0, 10)} · 数据来自 GitHub API`,
+          `Fetched ${gitlog.fetchedAt.slice(0, 10)} · from the GitHub API`
+        ),
+      ].join("\n");
+    },
+  },
+
+  pbcopy: {
+    desc: { zh: "把标准输入复制到剪贴板", en: "copy standard input to the clipboard" },
+    man: {
+      zh:
+        "真的写进你的剪贴板，不是显示一句「已复制」。\n" +
+        "  cat contact.txt | pbcopy\n" +
+        "浏览器可能会拦（需要页面处于前台且是你主动触发的），拦了会照实说。",
+      en:
+        "Really writes your clipboard rather than printing a copied line.\n" +
+        "  cat contact.txt | pbcopy\n" +
+        "Browsers can refuse — the page must be focused and the action yours. If it\n" +
+        "is refused, that is what you get told.",
+    },
+    async run(_args, stdin, ctx) {
+      if (stdin === null)
+        throw new Error(ctx.t("pbcopy: 用管道喂给它", "pbcopy: pipe something into it"));
+      await ctx.clipboard(stdin);
+      return ctx.t(`已复制 ${[...stdin].length} 个字符到剪贴板。`, `Copied ${[...stdin].length} characters to the clipboard.`);
+    },
+  },
+
+  ping: {
+    desc: { zh: "测到本站的往返时延", en: "measure the round trip to this site" },
+    usage: { zh: "ping [次数]", en: "ping [count]" },
+    man: {
+      zh:
+        "量的是 HTTP 往返，不是 ICMP —— 浏览器发不了 ICMP 包，说成 ping 只是借个名字。\n" +
+        "只能测本站：跨站请求的时间浏览器不让脚本看。\n" +
+        "数字是 performance.now() 前后差出来的，真的。",
+      en:
+        "This measures an HTTP round trip, not ICMP — a browser cannot send ICMP, so\n" +
+        "the name is borrowed. Only this site can be measured; timings for other\n" +
+        "origins are not visible to a script.\n" +
+        "The numbers come from performance.now() around the request, so they are real.",
+    },
+    async run(args, _stdin, ctx) {
+      const count = Math.max(1, Math.min(10, Number(args[0]) || 4));
+      const times: number[] = [];
+      for (let i = 0; i < count; i++) times.push(await ctx.probe("/api/me"));
+      const lines = times.map(
+        (ms, i) => `64 bytes from ${ME.host} (127.0.0.1): icmp_seq=${i + 1} time=${ms.toFixed(1)} ms`
+      );
+      const min = Math.min(...times);
+      const max = Math.max(...times);
+      const avg = times.reduce((a, b) => a + b, 0) / times.length;
+      return [
+        `PING ${ME.host} (127.0.0.1): 56 data bytes`,
+        ...lines,
+        "",
+        `--- ${ME.host} ping statistics ---`,
+        `${count} packets transmitted, ${count} received, 0% packet loss`,
+        `round-trip min/avg/max = ${min.toFixed(1)}/${avg.toFixed(1)}/${max.toFixed(1)} ms`,
+      ].join("\n");
+    },
   },
 
   ps: {

@@ -25,6 +25,9 @@ export const FIXED_TIME = "2026-07-29T20:33:00.000Z";
 /** 固定的单调时钟读数，ps 的 ELAPSED 断言靠它可重复 */
 export const FIXED_NOW = 83_000; // 1 分 23 秒
 
+/** 固定的往返时延，ping 的断言才可重复 */
+export const FIXED_RTT = 12.5;
+
 /**
  * 固定的机器参数。故意留一半是 null —— Safari 上 deviceMemory 和
  * performance.memory 就是拿不到，测试得覆盖那一半
@@ -62,7 +65,9 @@ export function ctxOf(
   /** vim 打开的内容记在这里，供断言 */
   edited: { text: string; name: string }[] = [],
   /** htop 打开过几次，供断言 */
-  monitored: boolean[] = []
+  monitored: boolean[] = [],
+  /** pbcopy 写进剪贴板的内容，供断言 */
+  copied: string[] = []
 ): Omit<Ctx, "piped"> {
   return {
     pkgs,
@@ -80,6 +85,10 @@ export function ctxOf(
     machine: async () => machine,
     page: (text, name) => paged.push({ text, name }),
     edit: (text, name) => edited.push({ text, name }),
+    clipboard: async (text) => {
+      copied.push(text);
+    },
+    probe: async () => FIXED_RTT,
     monitor: () => {
       monitored.push(true);
     },

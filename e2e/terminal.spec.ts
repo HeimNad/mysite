@@ -1,4 +1,7 @@
 import { devices, expect, test } from "@playwright/test";
+import { ME } from "@/lib/site/me";
+
+const ME_EMAIL = ME.email;
 
 // 这些路径只有真浏览器验证得了。之前每一个 UI bug 都出在这一层，
 // 而 lib/ 的单测一个都覆盖不到
@@ -290,6 +293,46 @@ test("github.txt 是构建期抓的真数据，并说明了它有多旧", async 
 
 // vim 的状态机单测全覆盖了。这里只验浏览器才验得了的：键盘归它、
 // 输入法能打中文、光标是真画出来的
+test("pbcopy 真的写进系统剪贴板", async ({ page, context }) => {
+  await context.grantPermissions(["clipboard-read", "clipboard-write"]);
+  const { log } = await boot(page);
+  await run(page, "cat contact.txt | pbcopy");
+  await expect(log).toContainText("已复制");
+
+  // 从剪贴板读回来 —— 只断言"提示出现了"证明不了它真写进去了
+  const pasted = await page.evaluate(() => navigator.clipboard.readText());
+  expect(pasted).toContain(ME_EMAIL);
+});
+
+test("ping 量的是真往返，不是写死的数", async ({ page }) => {
+  const hits: string[] = [];
+  page.on("request", (r) => {
+    if (r.url().includes("/api/me")) hits.push(r.url());
+  });
+  const { log } = await boot(page);
+  await run(page, "ping 3");
+
+  await expect(log).toContainText("3 packets transmitted, 3 received");
+  // 真的发了三次请求
+  expect(hits.length, `应该发 3 次，实际 ${hits.length}`).toBe(3);
+
+  const text = await log.innerText();
+  const times = [...text.matchAll(/time=([\d.]+) ms/g)].map((m) => Number(m[1]));
+  expect(times.length).toBe(3);
+  // 真测出来的值不会三次完全一样；也不该是 0
+  expect(times.every((t) => t > 0)).toBe(true);
+  expect(new Set(times).size, "三次时延完全相同不像是量出来的").toBeGreaterThan(1);
+});
+
+test("git log 列的是这个站自己的真实提交", async ({ page }) => {
+  const { log } = await boot(page);
+  await run(page, "git log -n 5");
+  const text = await log.innerText();
+  const rows = text.split("\n").filter((l) => /^[0-9a-f]{7}  \d{4}-\d{2}-\d{2}/.test(l));
+  expect(rows.length).toBe(5);
+  await expect(log).toContainText("数据来自 GitHub API");
+});
+
 test.describe("htop", () => {
   test.use({ viewport: { width: 900, height: 500 } });
 

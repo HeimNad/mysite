@@ -9,6 +9,7 @@ import { ME } from "../lib/site/me.ts";
 import { formatGithub } from "../lib/content/github.ts";
 
 const OUT = "content/github.txt";
+const LOG_OUT = "lib/site/gitlog.json";
 const user = new URL(ME.github).pathname.replace(/^\//, "");
 if (!/^[\w-]+$/.test(user)) throw new Error(`me.ts 里的 github 不像用户主页: ${ME.github}`);
 
@@ -26,9 +27,12 @@ const api = async (path) => {
   return res.json();
 };
 
-const [p, repos] = await Promise.all([
+const repoName = new URL(ME.repo).pathname.split("/").filter(Boolean)[1];
+const [p, repos, commits] = await Promise.all([
   api(`/users/${user}`),
   api(`/users/${user}/repos?sort=pushed&per_page=100`),
+  // 这个站自己的提交历史。构建期拿不到 —— Vercel 上没有 .git
+  api(`/repos/${user}/${repoName}/commits?per_page=20`),
 ]);
 
 const text = formatGithub({
@@ -54,6 +58,25 @@ const text = formatGithub({
   fetchedAt: new Date().toISOString(),
 });
 
+writeFileSync(
+  LOG_OUT,
+  JSON.stringify(
+    {
+      fetchedAt: new Date().toISOString(),
+      commits: commits.map((c) => ({
+        sha: c.sha.slice(0, 7),
+        date: c.commit.author.date.slice(0, 10),
+        author: c.commit.author.name,
+        // 只留标题行，正文在终端里太长
+        subject: c.commit.message.split("\n")[0],
+      })),
+    },
+    null,
+    1
+  ) + "\n"
+);
+
 writeFileSync(OUT, text + "\n");
 console.log(text);
 console.log(`\n✓ ${OUT}（${repos.length} 个仓库）`);
+console.log(`✓ ${LOG_OUT}（${commits.length} 条提交）`);
